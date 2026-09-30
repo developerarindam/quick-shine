@@ -37,6 +37,14 @@ const ServiceSchema = new mongoose.Schema(
       type: String, // for UI (optional)
     },
 
+    // Inventory used each time this service is done — deducted automatically when a job is saved
+    consumes: [
+      {
+        item: { type: mongoose.Schema.Types.ObjectId, ref: "InventoryItem", required: true },
+        qty: { type: Number, required: true, min: 0 },
+      },
+    ],
+
     sortOrder: {
       type: Number,
       default: 0,

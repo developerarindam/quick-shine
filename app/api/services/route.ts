@@ -1,46 +1,34 @@
-import { NextResponse } from "next/server";
-import dbConnect from "@/app/lib/dbConnect";
 import Service from "@/app/models/Service";
+import { fail, ok, withAuth } from "@/app/lib/auth";
+import { MANAGERS } from "@/app/lib/roles";
 
-export async function POST(req: Request) {
-  try {
-    await dbConnect();
-    const body = await req.json();
+// Active services by default; ?all=1 includes inactive ones (catalog management)
+export const GET = withAuth(null, async (req) => {
+  const { searchParams } = new URL(req.url);
+  const filter = searchParams.get("all") ? {} : { isActive: true };
+  const services = await Service.find(filter).sort({ sortOrder: 1, name: 1 }).lean();
+  return ok(services);
+});
 
-    const service = await Service.create(body);
+export const POST = withAuth(MANAGERS, async (req) => {
+  const body = await req.json();
+  if (!body.name || !String(body.name).trim()) return fail("Service name is required");
+  if (body.price === undefined || body.price === "" || Number(body.price) < 0) return fail("Enter a valid price");
 
-    return NextResponse.json({ success: true, data: service });
-  } catch (err: any) {
-    return NextResponse.json(
-      { success: false, message: err.message },
-      { status: 500 }
-    );
-  }
-}
+  const service = await Service.create({
+    name: body.name,
+    price: Number(body.price),
+    category: body.category || "basic",
+    description: body.description,
+    duration: body.duration ? Number(body.duration) : undefined,
+    sortOrder: Number(body.sortOrder) || 0,
+    isActive: body.isActive ?? true,
+    consumes: Array.isArray(body.consumes)
+      ? body.consumes
+          .filter((c: { item?: string; qty?: number }) => c.item && Number(c.qty) > 0)
+          .map((c: { item: string; qty: number }) => ({ item: c.item, qty: Number(c.qty) }))
+      : [],
+  });
 
-export async function GET() {
-    await dbConnect();
-  
-    const services = await Service.find({ isActive: true }).sort({ sortOrder: 1 });
-  
-    return NextResponse.json({ success: true, data: services });
-  }
-
-  export async function PUT(req: Request, { params }: any) {
-    await dbConnect();
-    const body = await req.json();
-  
-    const updated = await Service.findByIdAndUpdate(params.id, body, {
-      new: true,
-    });
-  
-    return NextResponse.json({ success: true, data: updated });
-  }
-  
-  export async function DELETE(req: Request, { params }: any) {
-    await dbConnect();
-  
-    await Service.findByIdAndDelete(params.id);
-  
-    return NextResponse.json({ success: true });
-  }
+  return ok(service);
+});

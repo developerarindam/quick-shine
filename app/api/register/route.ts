@@ -1,40 +1,44 @@
+// First-run setup: creates the owner (ADMIN) account. Closed once any user exists —
+// after that, staff accounts are created by the owner from the Users screen.
 import { NextResponse } from "next/server";
 import dbConnect from "@/app/lib/dbConnect";
 import User from "@/app/models/User";
+import { errorResponse, fail } from "@/app/lib/auth";
+
+export async function GET() {
+  try {
+    await dbConnect();
+    const count = await User.estimatedDocumentCount();
+    return NextResponse.json({ success: true, data: { needsSetup: count === 0 } });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    await dbConnect(); // Ensure DB connection
+    await dbConnect();
+
+    if ((await User.countDocuments()) > 0) {
+      return fail("Setup is already complete. Ask the owner to create your account.", 403);
+    }
 
     const { name, email, password } = await req.json();
 
     if (!name || !email || !password) {
-      return NextResponse.json(
-        { message: "All fields are required" },
-        { status: 400 }
-      );
+      return fail("All fields are required");
+    }
+    if (String(password).length < 6) {
+      return fail("Password must be at least 6 characters");
     }
 
-    const existingUser = await User.findOne({ email });
-
-    if (existingUser) {
-      return NextResponse.json(
-        { message: "User already exists" },
-        { status: 400 }
-      );
-    }
-
-    await User.create({ name, email, password });
+    await User.create({ name, email, password, role: "ADMIN", status: "Active" });
 
     return NextResponse.json(
-      { message: "User registered successfully" },
+      { success: true, message: "Owner account created" },
       { status: 201 }
     );
-  } catch (error: any) {
-    console.error("REGISTER_ERROR:", error);
-    return NextResponse.json(
-      { message: "Internal server error", error: error.message },
-      { status: 500 }
-    );
+  } catch (err) {
+    return errorResponse(err);
   }
 }

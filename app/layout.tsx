@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -14,7 +14,22 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Quick Shine",
-  description: "Welcome to Quick Shine Service Entry Book.",
+  description: "Quick Shine bike detailing studio — jobs, customers, payments and reports.",
+  applicationName: "Quick Shine",
+  appleWebApp: {
+    capable: true,
+    title: "Quick Shine",
+    statusBarStyle: "default",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#27548b",
 };
 
 export default function RootLayout({

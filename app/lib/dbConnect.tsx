@@ -1,39 +1,49 @@
 import mongoose from "mongoose";
+import { attachDatabasePool } from "@vercel/functions";
 
 const MONGODB_URI = process.env.DB_URI_MONGODB_URI as string;
 
 if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable inside .env.local");
+  throw new Error("Missing MONGODB_URI environment variable");
 }
 
+// Global cache (for hot reload & lambda reuse)
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
 }
 
-// Extend global type
 declare global {
-  var mongoose: MongooseCache | undefined;
+  var mongooseCache: MongooseCache | undefined;
 }
 
-let cached: MongooseCache = global.mongoose || {
+const globalWithCache = global as typeof globalThis & {
+  mongooseCache?: MongooseCache;
+};
+
+const cached = globalWithCache.mongooseCache || {
   conn: null,
   promise: null,
 };
 
-if (!global.mongoose) {
-  global.mongoose = cached;
+if (!globalWithCache.mongooseCache) {
+  globalWithCache.mongooseCache = cached;
 }
 
 async function dbConnect(): Promise<typeof mongoose> {
-  if (cached.conn) {
-    return cached.conn;
-  }
+  if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    const opts = {
       bufferCommands: false,
-    }).then((mongoose) => mongoose);
+      maxIdleTimeMS: 5000,
+      dbName: process.env.DB_NAME || "QuickShine", // 🔥 explicitly setting DB here (DB_NAME overrides, e.g. for a test database)
+    };
+
+    cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      attachDatabasePool(mongoose.connection.getClient());
+      return mongoose;
+    });
   }
 
   cached.conn = await cached.promise;

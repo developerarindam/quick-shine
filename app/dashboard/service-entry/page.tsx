@@ -1,157 +1,173 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
+import { ClipboardList, Plus } from "lucide-react";
+import { useSession } from "@/app/components/AppShell";
+import { JobCard } from "@/app/components/jobs";
+import { Card, Chips, EmptyState, ErrorState, Input, ListSkeleton, Page, SearchInput, Segmented, buttonClass } from "@/app/components/ui";
+import { useApi } from "@/app/lib/api";
+import { can } from "@/app/lib/roles";
+import { ACTIVE_STATUSES, STATUS_META, balanceOf, type JobStatus } from "@/app/lib/jobs";
+import {
+  RANGE_LABEL,
+  endOfDay,
+  fromDateInput,
+  inr,
+  rangeFor,
+  rangeQuery,
+  toDateInput,
+  type RangePreset,
+} from "@/app/lib/format";
+import type { Job } from "@/app/lib/types";
 
-// 🔹 Interfaces (unchanged)
-export interface Bike {
-  _id: string;
-  bikeNumber: string;
-  ownerName: string;
-  phone: string;
-  model: string;
+type Tab = "active" | "history" | "due";
+
+export default function JobsPage() {
+  return (
+    <Suspense>
+      <JobsList />
+    </Suspense>
+  );
 }
 
-export interface Service {
-  _id: string;
-  name: string;
-  price: number;
-}
+function JobsList() {
+  const user = useSession();
+  const showMoney = can.manageStudio(user.role);
+  const params = useSearchParams();
 
-export interface ServiceItem {
-  _id: string;
-  serviceId: Service;
-  price: number;
-}
-
-export interface ServiceEntry {
-  _id: string;
-  bikeId: Bike;
-  services: ServiceItem[];
-  subtotal: number;
-  discount: number;
-  discountType: "flat" | "percent";
-  total: number;
-  date: string;
-}
-
-interface ServiceEntryResponse {
-  data: ServiceEntry[];
-  success: boolean;
-}
-
-export default function ServiceEntryPage() {
-  const [entries, setEntries] = useState<ServiceEntry[]>([]);
+  const initialTab = (params.get("tab") as Tab) || "active";
+  const [tab, setTab] = useState<Tab>(["active", "history", "due"].includes(initialTab) ? initialTab : "active");
+  const [statusFilter, setStatusFilter] = useState<"all" | JobStatus>((params.get("status") as JobStatus) || "all");
+  const [preset, setPreset] = useState<RangePreset>("today");
+  const [customDay, setCustomDay] = useState(toDateInput(new Date()));
   const [search, setSearch] = useState("");
 
-  // 🔹 Fetch Entries
-  const fetchEntries = async () => {
-    const res = await fetch("/api/service-entry");
-    const data: ServiceEntryResponse = await res.json();
-    if(!data.success) {
-      alert("Failed to fetch entries");
-      return;
-    }
-    setEntries(data.data);
-  };
+  const url = useMemo(() => {
+    if (tab === "active") return "/api/service-entry?view=active";
+    if (tab === "due") return "/api/service-entry?view=due";
+    const range =
+      preset === "custom"
+        ? { from: fromDateInput(customDay), to: endOfDay(fromDateInput(customDay)) }
+        : rangeFor(preset);
+    return `/api/service-entry?${rangeQuery(range)}`;
+  }, [tab, preset, customDay]);
 
-  useEffect(() => {
-    fetchEntries();
-  }, []);
+  const { data, loading, error, reload } = useApi<Job[]>(url);
 
-  // 🔹 Filter Logic (Aligned with business object)
-console.log("Filtering entries with search:", entries);
-
-  const filteredEntries = entries.filter((entry) => {
-    const keyword = search.toLowerCase();
-
-    return (
-      entry.bikeId.bikeNumber.toLowerCase().includes(keyword) ||
-      entry.bikeId.ownerName.toLowerCase().includes(keyword) ||
-      entry.bikeId.phone.includes(keyword)
-    );
-  });
-
-  // 🔹 Delete Entry
-  const handleDelete = async (id: string) => {
-    if (!confirm("Delete this entry?")) return;
-
-    await fetch(`/api/service-entry/${id}`, {
-      method: "DELETE",
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const compactQ = q.replace(/[^a-z0-9]/g, "");
+    return (data || []).filter((job) => {
+      if (tab === "active" && statusFilter !== "all" && job.status !== statusFilter) return false;
+      if (!q) return true;
+      const b = job.bikeId;
+      return (
+        (compactQ && b?.bikeNumber?.toLowerCase().replace(/[^a-z0-9]/g, "").includes(compactQ)) ||
+        b?.ownerName?.toLowerCase().includes(q) ||
+        b?.phone?.includes(q) ||
+        b?.model?.toLowerCase().includes(q) ||
+        String(job.jobNo || "").includes(q.replace("#", ""))
+      );
     });
+  }, [data, search, statusFilter, tab]);
 
-    fetchEntries();
-  };
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: data?.length || 0 };
+    for (const s of ACTIVE_STATUSES) c[s] = (data || []).filter((j) => j.status === s).length;
+    return c;
+  }, [data]);
+
+  const totalBilled = filtered.reduce((s, j) => s + j.total, 0);
+  const totalDue = filtered.reduce((s, j) => s + balanceOf(j), 0);
+
+  const tabs: { value: Tab; label: string }[] = [
+    { value: "active", label: "In studio" },
+    { value: "history", label: "History" },
+    { value: "due", label: "Dues" },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* 🔹 Controls */}
-      <div className="flex justify-between gap-4">
-        <input
-          type="text"
-          placeholder="Search by bike / owner / phone..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border px-4 py-2 rounded-lg w-full md:w-1/3"
-        />
+    <Page
+      title="Jobs"
+      actions={
+        <Link href="/dashboard/service-entry/add" className={buttonClass("primary", "sm", "max-lg:hidden")}>
+          <Plus className="size-4" /> New job
+        </Link>
+      }
+    >
+      <div className="space-y-3">
+        <Segmented options={tabs} value={tab} onChange={setTab} />
 
-        <a
-          href="/dashboard/service-entry/add"
-          className="bg-black text-white px-4 py-2 rounded-lg"
-        >
-          + Add Entry
-        </a>
-      </div>
+        {tab === "active" && (
+          <Chips
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "all", label: "All", count: counts.all },
+              ...ACTIVE_STATUSES.map((s) => ({ value: s, label: STATUS_META[s].short, count: counts[s] })),
+            ]}
+          />
+        )}
 
-      {/* 🔹 Table */}
-      <div className="bg-white rounded-xl shadow">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-900 text-amber-50">
-            <tr>
-              <th className="p-3">Bike Number</th>
-              <th>Owner</th>
-              <th>Phone</th>
-              <th>Services</th>
-              <th>Total</th>
-              <th>Date</th>
-              <th>Action</th>
-            </tr>
-          </thead>
+        {tab === "history" && (
+          <>
+            <Chips
+              value={preset}
+              onChange={setPreset}
+              options={(["today", "yesterday", "week", "month", "custom"] as RangePreset[]).map((p) => ({
+                value: p,
+                label: RANGE_LABEL[p],
+              }))}
+            />
+            {preset === "custom" && (
+              <Input type="date" value={customDay} max={toDateInput(new Date())} onChange={(e) => e.target.value && setCustomDay(e.target.value)} />
+            )}
+          </>
+        )}
 
-          <tbody>
-            {filteredEntries.map((entry) => (
-              <tr key={entry._id} className="border-t">
-                <td className="p-3">{entry.bikeId.bikeNumber}</td>
-                <td>{entry.bikeId.ownerName}</td>
-                <td>{entry.bikeId.phone}</td>
+        <SearchInput value={search} onChange={setSearch} placeholder="Bike number, owner, phone, job #" />
 
-                {/* 🔹 Services List */}
-                <td>
-                  {entry.services.map((s) => (
-                    <div key={s._id}>
-                      {s.serviceId.name} (₹{s.price})
-                    </div>
-                  ))}
-                </td>
+        {/* Summary strip */}
+        {data && filtered.length > 0 && tab !== "active" && (
+          <div className="flex items-center justify-between rounded-2xl bg-brand-50 px-4 py-3 text-sm">
+            <span className="font-medium text-brand-800">{filtered.length} job(s)</span>
+            {showMoney && (
+              <span className="font-semibold tabular-nums text-brand-800">
+                {tab === "due" ? `${inr(totalDue)} to collect` : `${inr(totalBilled)} billed`}
+              </span>
+            )}
+          </div>
+        )}
 
-                <td>₹{entry.total}</td>
-                <td>{new Date(entry.date).toLocaleDateString()}</td>
-
-                <td className="flex gap-2 p-3">
-                  <button className="text-blue-600">
-                    View
-                  </button>
-                  <button
-                    onClick={() => handleDelete(entry._id)}
-                    className="text-red-600"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
+        {error ? (
+          <ErrorState message={error} onRetry={reload} />
+        ) : loading && !data ? (
+          <ListSkeleton />
+        ) : filtered.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<ClipboardList />}
+              title={search ? "No matching jobs" : tab === "due" ? "No pending dues 🎉" : tab === "active" ? "No bikes in the studio" : "No jobs in this period"}
+              text={tab === "active" && !search ? "New jobs you create will show here until they're delivered." : undefined}
+              action={
+                tab === "active" && !search ? (
+                  <Link href="/dashboard/service-entry/add" className={buttonClass("primary")}>
+                    <Plus className="size-4" /> New job
+                  </Link>
+                ) : undefined
+              }
+            />
+          </Card>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {filtered.map((job) => (
+              <JobCard key={job._id} job={job} />
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
-    </div>
+    </Page>
   );
 }

@@ -18,6 +18,9 @@ const BikeSchema = new mongoose.Schema(
     model: {
       type: String,
     },
+    notes: {
+      type: String,
+    },
   },
   { timestamps: true }
 );
