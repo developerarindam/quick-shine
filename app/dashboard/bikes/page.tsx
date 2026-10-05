@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
-import { Bike as BikeIcon, Crown, MessageCircle, Phone, Plus, Star, Wrench } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { Banknote, Bike as BikeIcon, Crown, MessageCircle, Phone, Plus, Smartphone, Star, Wrench } from "lucide-react";
+import { PERIOD_LABEL, PeriodPicker, usePeriod } from "@/app/components/PeriodPicker";
 import { accentFor, customerTier } from "@/app/components/bikes";
 import BikeFormSheet from "@/app/components/BikeFormSheet";
 import { Avatar, Button, Card, Chips, EmptyState, ErrorState, Fab, Page, SearchInput, Select, Skeleton, cn } from "@/app/components/ui";
 import { useApi } from "@/app/lib/api";
-import { fmtAgo, inr, phoneDigits } from "@/app/lib/format";
+import { fmtAgo, inr, phoneDigits, rangeQuery } from "@/app/lib/format";
 import type { Bike } from "@/app/lib/types";
 
-type Filter = "all" | "studio" | "due" | "regular" | "new";
+type Filter = "all" | "period" | "studio" | "due" | "regular" | "new";
+type PeriodRow = { jobs: number; billed: number; cash: number; online: number };
+type Summary = { totals: PeriodRow & { total: number; bikes: number }; byBike: Record<string, PeriodRow> };
 type Sort = "recent" | "visits" | "spent" | "az";
 
 export default function BikesPage() {
@@ -32,22 +35,38 @@ function BikesList() {
   // Dashboard "Add bike" quick action → /dashboard/bikes?add=1
   const [formOpen, setFormOpen] = useState(() => !!params.get("add"));
 
+  // Cash / online collected per period — "today" rolls over by itself after midnight
+  const period = usePeriod("today");
+  const summary = useApi<Summary>(`/api/bikes/summary?${rangeQuery(period.range)}`);
+  const reloadSummary = summary.reload;
+  useEffect(() => {
+    // pick up payments taken on other phones when the app comes back to the foreground
+    const onVisible = () => document.visibilityState === "visible" && reloadSummary();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [reloadSummary]);
+  const byBike = summary.data?.byBike;
+  const t = summary.data?.totals;
+  const periodLabel = PERIOD_LABEL[period.preset];
+
   const all = useMemo(() => data || [], [data]);
   const counts = useMemo(
     () => ({
       all: all.length,
+      period: byBike ? all.filter((b) => byBike[b._id]).length : 0,
       studio: all.filter((b) => b.inStudio).length,
       due: all.filter((b) => (b.due || 0) > 0).length,
       regular: all.filter((b) => (b.visits || 0) >= 3).length,
       new: all.filter((b) => (b.visits || 0) <= 1).length,
     }),
-    [all],
+    [all, byBike],
   );
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     const compactQ = q.replace(/[^a-z0-9]/g, "");
     const list = all.filter((b) => {
+      if (filter === "period" && !byBike?.[b._id]) return false;
       if (filter === "studio" && !b.inStudio) return false;
       if (filter === "due" && !((b.due || 0) > 0)) return false;
       if (filter === "regular" && (b.visits || 0) < 3) return false;
@@ -71,7 +90,7 @@ function BikesList() {
       az: (a, b) => a.bikeNumber.localeCompare(b.bikeNumber),
     };
     return [...list].sort(by[sort]);
-  }, [all, search, filter, sort]);
+  }, [all, search, filter, sort, byBike]);
 
   return (
     <Page
@@ -84,7 +103,44 @@ function BikesList() {
         </Button>
       }
     >
+      {/* Collection for the selected period */}
+      <PeriodPicker period={period} />
+      <div className={cn("mt-3 rounded-3xl bg-linear-to-br from-brand-600 via-brand-700 to-brand-900 p-5 text-white shadow-lg shadow-brand-900/20", summary.loading && "opacity-80")}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm capitalize text-white/70">Collected {periodLabel}</p>
+            <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums">{t ? inr(t.total) : "—"}</p>
+          </div>
+          <div className="text-right text-xs text-white/70">
+            <p>
+              <b className="text-base text-white tabular-nums">{t?.bikes ?? "–"}</b> bikes served
+            </p>
+            <p>
+              <b className="text-white tabular-nums">{t?.jobs ?? "–"}</b> jobs · billed <b className="text-white tabular-nums">{t ? inr(t.billed) : "–"}</b>
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2.5">
+            <Banknote className="size-5 text-emerald-300" />
+            <div>
+              <p className="text-[11px] text-white/60">Cash</p>
+              <p className="font-semibold tabular-nums">{t ? inr(t.cash) : "—"}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-3 py-2.5">
+            <Smartphone className="size-5 text-sky-300" />
+            <div>
+              <p className="text-[11px] text-white/60">UPI / Online</p>
+              <p className="font-semibold tabular-nums">{t ? inr(t.online) : "—"}</p>
+            </div>
+          </div>
+        </div>
+        {summary.error && <p className="mt-3 text-xs text-red-200">{summary.error}</p>}
+      </div>
+
       {/* Summary strip */}
+      <div className="mt-4" />
       <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 lg:mx-0 lg:grid lg:grid-cols-4 lg:px-0">
         <SummaryPill
           label="Registered"
@@ -133,6 +189,7 @@ function BikesList() {
         onChange={setFilter}
         options={[
           { value: "all", label: "All", count: counts.all },
+          { value: "period", label: `Served ${periodLabel}`, count: counts.period },
           { value: "studio", label: "In studio", count: counts.studio },
           { value: "due", label: "Dues", count: counts.due },
           { value: "regular", label: "Regulars", count: counts.regular },
@@ -167,7 +224,7 @@ function BikesList() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((b) => (
-              <BikeCard key={b._id} bike={b} />
+              <BikeCard key={b._id} bike={b} period={byBike?.[b._id]} periodLabel={periodLabel} />
             ))}
           </div>
         )}
@@ -214,7 +271,7 @@ function SummaryPill({
   );
 }
 
-function BikeCard({ bike }: { bike: Bike }) {
+function BikeCard({ bike, period, periodLabel }: { bike: Bike; period?: PeriodRow; periodLabel: string }) {
   const tier = customerTier(bike.visits);
   const phone = phoneDigits(bike.phone);
   const due = bike.due || 0;
@@ -269,6 +326,26 @@ function BikeCard({ bike }: { bike: Bike }) {
           </dl>
         </div>
       </Link>
+
+      {/* Money for the selected period */}
+      {period && (
+        <div className="mx-4 mt-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs">
+          <span className="font-semibold capitalize text-emerald-800">{periodLabel}</span>
+          <span className="flex flex-wrap justify-end gap-x-3 tabular-nums text-emerald-900">
+            {period.cash > 0 && (
+              <span>
+                Cash <b>{inr(period.cash)}</b>
+              </span>
+            )}
+            {period.online > 0 && (
+              <span>
+                Online <b>{inr(period.online)}</b>
+              </span>
+            )}
+            {period.cash + period.online === 0 && <span>Billed {inr(period.billed)} · unpaid</span>}
+          </span>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-2 p-4 pt-3">

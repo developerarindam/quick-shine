@@ -22,7 +22,9 @@ import {
 } from "@/app/components/ui";
 import { api, useApi } from "@/app/lib/api";
 import { STATUS_META, calcTotals, type DiscountType, type JobStatus, type PaymentType } from "@/app/lib/jobs";
-import { fmtDate, inr } from "@/app/lib/format";
+import { fmtDate, fmtDateTime, inr, toDateTimeInput } from "@/app/lib/format";
+import { can } from "@/app/lib/roles";
+import { OnlinePayeeNote } from "@/app/components/OnlinePayeeNote";
 import type { Bike, Service, TeamMember } from "@/app/lib/types";
 
 const CATEGORY_LABEL: Record<Service["category"], string> = {
@@ -72,6 +74,12 @@ function NewJobForm() {
   const [status, setStatus] = useState<JobStatus>("in_progress");
   const [assignedTo, setAssignedTo] = useState(user.id);
   const [notes, setNotes] = useState("");
+  const [collectedBy, setCollectedBy] = useState(user.id);
+  // Super Admin can enter an older job; untouched means "now" (set by the server)
+  const canBackdate = can.editHistory(user.role);
+  const [jobDate, setJobDate] = useState(() => toDateTimeInput(new Date()));
+  const [dateTouched, setDateTouched] = useState(false);
+  const backdated = dateTouched && new Date(jobDate).getTime() < Date.now() - 10 * 60 * 1000;
   const [showNotes, setShowNotes] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -169,6 +177,8 @@ function NewJobForm() {
           status,
           assignedTo,
           notes,
+          collectedBy,
+          date: canBackdate && dateTouched ? new Date(jobDate).toISOString() : undefined,
         },
       });
       toast(`Job #${job.jobNo} created`);
@@ -444,6 +454,38 @@ function NewJobForm() {
       {/* ─────────── 4. Payment & status ─────────── */}
       <SectionTitle>{lines.length > 0 ? "4" : "3"} · Payment & status</SectionTitle>
       <Card className="space-y-4 p-4">
+        {canBackdate && (
+          <Field
+            label="Job date & time"
+            hint={backdated ? undefined : "Defaults to now — change it only to enter an older job"}
+          >
+            <Input
+              type="datetime-local"
+              value={jobDate}
+              max={toDateTimeInput(new Date())}
+              onChange={(e) => {
+                if (!e.target.value) return;
+                setJobDate(e.target.value);
+                setDateTouched(true);
+              }}
+            />
+            {backdated && (
+              <span className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                Back-dated entry: {fmtDateTime(new Date(jobDate))}
+                <button
+                  type="button"
+                  className="font-semibold text-brand-700"
+                  onClick={() => {
+                    setJobDate(toDateTimeInput(new Date()));
+                    setDateTouched(false);
+                  }}
+                >
+                  Use now
+                </button>
+              </span>
+            )}
+          </Field>
+        )}
         <Field label="Payment">
           <Segmented
             value={paymentType}
@@ -458,6 +500,19 @@ function NewJobForm() {
         {paymentType === "due" && (
           <Field label="Advance received (cash)" hint="Leave empty if nothing was paid yet">
             <MoneyInput value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="0" />
+          </Field>
+        )}
+        {paymentType === "online" && <OnlinePayeeNote />}
+        {(paymentType === "cash" || (paymentType === "due" && Number(advance) > 0)) && (
+          <Field label="Cash collected by" hint="This person holds the cash until they hand it over">
+            <Select value={collectedBy} onChange={(e) => setCollectedBy(e.target.value)}>
+              {(team.data || [{ _id: user.id, name: user.name }]).map((m) => (
+                <option key={m._id} value={m._id}>
+                  {m.name}
+                  {m._id === user.id ? " (me)" : ""}
+                </option>
+              ))}
+            </Select>
           </Field>
         )}
 
@@ -507,6 +562,7 @@ function NewJobForm() {
             <p className="text-xs text-slate-500">
               {lines.length} service{lines.length === 1 ? "" : "s"}
               {paymentType === "due" ? " · pay later" : ""}
+              {backdated ? ` · ${fmtDate(new Date(jobDate))}` : ""}
             </p>
             <p className="text-xl font-bold tabular-nums text-slate-900">{inr(totals.total)}</p>
           </div>

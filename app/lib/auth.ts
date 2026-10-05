@@ -8,6 +8,16 @@ import type { Role, SessionUser } from "@/app/lib/roles";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
+// Short-lived per-instance cache so each API call doesn't wait on a user lookup first.
+// Role / status changes take effect within SESSION_TTL_MS (and immediately on the instance
+// that made them, via clearSessionCache).
+const SESSION_TTL_MS = 30_000;
+const sessionCache = new Map<string, { user: SessionUser; expires: number }>();
+
+export function clearSessionCache() {
+  sessionCache.clear();
+}
+
 /** Reads the session cookie and loads the (active) user from the database. */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
@@ -22,17 +32,26 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   }
   if (!decoded.id) return null;
 
+  const hit = sessionCache.get(token);
+  if (hit && hit.expires > Date.now()) return hit.user;
+
   await dbConnect();
   const user = await User.findById(decoded.id).lean();
-  if (!user || user.status !== "Active") return null;
+  if (!user || user.status !== "Active") {
+    sessionCache.delete(token);
+    return null;
+  }
 
-  return {
+  const session: SessionUser = {
     id: String(user._id),
     name: user.name,
     email: user.email,
     phone: user.phone,
     role: user.role,
   };
+  if (sessionCache.size > 500) sessionCache.clear();
+  sessionCache.set(token, { user: session, expires: Date.now() + SESSION_TTL_MS });
+  return session;
 }
 
 /** For server pages: redirects away when not signed in or not allowed. */
@@ -81,6 +100,7 @@ export function errorResponse(err: unknown) {
     return fail(first?.message || "Invalid data", 400);
   }
   if (e?.name === "CastError") return fail("Invalid id", 400);
+  if (e?.name === "InputError") return fail(e.message || "Invalid data", 400);
   console.error("API_ERROR:", err);
   return fail(e?.message || "Something went wrong", 500);
 }

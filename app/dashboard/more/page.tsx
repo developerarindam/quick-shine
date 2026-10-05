@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ChevronRight, Globe, LogOut, Package, Receipt, Sparkles, UserCircle, Users } from "lucide-react";
-import { useLowStock, useSession } from "@/app/components/AppShell";
+import { BarChart3, ChevronRight, Globe, LogOut, Package, Receipt, Sparkles, UserCircle, Users, Wallet } from "lucide-react";
+import { useLowStock, usePendingHandovers, useSession } from "@/app/components/AppShell";
 import { Avatar, Badge, Card, Page, SectionTitle } from "@/app/components/ui";
 import { can, ROLE_LABEL } from "@/app/lib/roles";
 
 export default function MorePage() {
   const user = useSession();
   const lowStock = useLowStock();
+  const handovers = usePendingHandovers();
+  const toApprove = can.approveCash(user.role) ? handovers.pending.length : 0;
 
   const manage = [
     { href: "/dashboard/reports", icon: BarChart3, label: "Reports", sub: "Revenue, profit, top services", show: can.manageStudio(user.role), color: "bg-brand-100 text-brand-700" },
@@ -41,6 +43,26 @@ export default function MorePage() {
           <ChevronRight className="size-5 text-slate-300" />
         </Card>
       </Link>
+
+      <SectionTitle>Money</SectionTitle>
+      <Card className="overflow-hidden">
+        <MenuRow
+          href="/dashboard/cash"
+          icon={Wallet}
+          label="Cash & handover"
+          sub={
+            toApprove
+              ? `${toApprove} handover(s) waiting for your approval`
+              : can.approveCash(user.role)
+                ? "Approve handovers, see who holds cash"
+                : handovers.pending.length
+                  ? "Your handover is waiting for approval"
+                  : "Hand over collected cash at end of day"
+          }
+          color="bg-emerald-100 text-emerald-700"
+          badge={toApprove}
+        />
+      </Card>
 
       {manage.length > 0 && (
         <>

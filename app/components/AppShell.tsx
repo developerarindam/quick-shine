@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import {
   BarChart3,
   Bike,
@@ -12,6 +12,7 @@ import {
   LogOut,
   Plus,
   Package,
+  Wallet,
   Receipt,
   Sparkles,
   UserCircle,
@@ -28,6 +29,14 @@ const SessionCtx = createContext<SessionUser | null>(null);
 const LowStockCtx = createContext<{ items: LowStockItem[]; reload: () => void }>({ items: [], reload: () => {} });
 
 /** Items at/below their reorder level (always empty for staff). */
+type PendingHandover = { _id: string; amount: number; from: { _id: string; name: string } | null; createdAt: string };
+const HandoverCtx = createContext<{ pending: PendingHandover[]; reload: () => void }>({ pending: [], reload: () => {} });
+
+/** Cash handovers waiting: for Super Admin / Admin the ones to approve, for staff their own. */
+export function usePendingHandovers() {
+  return useContext(HandoverCtx);
+}
+
 export function useLowStock() {
   return useContext(LowStockCtx);
 }
@@ -45,6 +54,7 @@ const SIDEBAR: NavItem[] = [
   { name: "Jobs", href: "/dashboard/service-entry", icon: ClipboardList },
   { name: "Bikes & Customers", href: "/dashboard/bikes", icon: Bike },
   { name: "Services", href: "/dashboard/services", icon: Sparkles, show: (u) => can.manageStudio(u.role) },
+  { name: "Cash & handover", href: "/dashboard/cash", icon: Wallet },
   { name: "Inventory", href: "/dashboard/inventory", icon: Package, show: (u) => can.manageStudio(u.role) },
   { name: "Expenses", href: "/dashboard/expenses", icon: Receipt, show: (u) => can.manageStudio(u.role) },
   { name: "Reports", href: "/dashboard/reports", icon: BarChart3, show: (u) => can.manageStudio(u.role) },
@@ -62,12 +72,12 @@ const TABS: NavItem[] = [
 const NEW_JOB = "/dashboard/service-entry/add";
 
 // Full-screen flows that bring their own bottom action bar
-const HIDE_TABS = [NEW_JOB];
+const hidesTabs = (pathname: string) => pathname === NEW_JOB || pathname.endsWith("/edit");
 
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
   if (href === "/dashboard/more") {
-    return ["/dashboard/more", "/dashboard/services", "/dashboard/expenses", "/dashboard/inventory", "/dashboard/reports", "/dashboard/users", "/dashboard/profile"].some(
+    return ["/dashboard/more", "/dashboard/cash", "/dashboard/services", "/dashboard/expenses", "/dashboard/inventory", "/dashboard/reports", "/dashboard/users", "/dashboard/profile"].some(
       (p) => pathname.startsWith(p)
     );
   }
@@ -76,19 +86,38 @@ function isActive(pathname: string, href: string) {
 
 export default function AppShell({ user, children }: { user: SessionUser; children: ReactNode }) {
   const pathname = usePathname();
-  const hideTabs = HIDE_TABS.includes(pathname);
+  const hideTabs = hidesTabs(pathname);
 
   // Low-stock alerts for Super Admin / Admin, refreshed on every navigation
   const lowStock = useApi<LowStockItem[]>(can.manageStudio(user.role) ? "/api/inventory?low=1" : null);
   const reloadLowStock = lowStock.reload;
-  useEffect(() => {
-    reloadLowStock();
-  }, [pathname, reloadLowStock]);
   const lowItems = lowStock.data || [];
+
+  const handovers = useApi<PendingHandover[]>("/api/cash/handover");
+  const reloadHandovers = handovers.reload;
+
+  // Refresh the badges while moving around, but at most every 30s so they never
+  // compete with the page's own data on every tap (both load once on mount anyway)
+  const lastBadgeRefresh = useRef(0);
+  useEffect(() => {
+    const now = Date.now();
+    if (lastBadgeRefresh.current === 0) {
+      lastBadgeRefresh.current = now;
+      return;
+    }
+    if (now - lastBadgeRefresh.current < 30_000) return;
+    lastBadgeRefresh.current = now;
+    reloadLowStock();
+    reloadHandovers();
+  }, [pathname, reloadLowStock, reloadHandovers]);
+  const pendingHandovers = handovers.data || [];
+  // badge only when someone needs to act: approvers see requests to approve
+  const handoverAlert = can.approveCash(user.role) ? pendingHandovers.length : 0;
 
   return (
     <SessionCtx.Provider value={user}>
       <LowStockCtx.Provider value={{ items: lowItems, reload: reloadLowStock }}>
+      <HandoverCtx.Provider value={{ pending: pendingHandovers, reload: reloadHandovers }}>
       <OverlayProvider>
         <div className="min-h-dvh">
           {/* ── Desktop sidebar ── */}
@@ -127,6 +156,11 @@ export default function AppShell({ user, children }: { user: SessionUser; childr
                   >
                     <item.icon className="size-5" />
                     <span className="flex-1">{item.name}</span>
+                    {item.href === "/dashboard/cash" && handoverAlert > 0 && (
+                      <span className="rounded-full bg-red-500 px-1.5 text-xs font-bold text-white" title="Cash handovers to approve">
+                        {handoverAlert}
+                      </span>
+                    )}
                     {item.href === "/dashboard/inventory" && lowItems.length > 0 && (
                       <span className="rounded-full bg-red-500 px-1.5 text-xs font-bold text-white" title="Items low on stock">
                         {lowItems.length}
@@ -176,13 +210,14 @@ export default function AppShell({ user, children }: { user: SessionUser; childr
                   </Link>
                 </div>
                 {TABS.slice(2).map((t) => (
-                  <TabLink key={t.href} item={t} active={isActive(pathname, t.href)} alert={t.href === "/dashboard/more" && lowItems.length > 0} />
+                  <TabLink key={t.href} item={t} active={isActive(pathname, t.href)} alert={t.href === "/dashboard/more" && (lowItems.length > 0 || handoverAlert > 0)} />
                 ))}
               </div>
             </nav>
           )}
         </div>
       </OverlayProvider>
+      </HandoverCtx.Provider>
       </LowStockCtx.Provider>
     </SessionCtx.Provider>
   );

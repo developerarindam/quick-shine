@@ -1,5 +1,5 @@
 import User from "@/app/models/User";
-import { fail, ok, withAuth } from "@/app/lib/auth";
+import { clearSessionCache, fail, ok, withAuth } from "@/app/lib/auth";
 
 // Update own name/phone, and optionally change password (requires the current one)
 export const PUT = withAuth(null, async (req, _ctx, session) => {
@@ -23,5 +23,6 @@ export const PUT = withAuth(null, async (req, _ctx, session) => {
   }
 
   await user.save();
+  clearSessionCache();
   return ok({ id: String(user._id), name: user.name, email: user.email, phone: user.phone, role: user.role });
 });

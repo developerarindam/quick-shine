@@ -4,6 +4,7 @@ import Service from "@/app/models/Service";
 import "@/app/models/User";
 import { nextSequence } from "@/app/models/Counter";
 import { consumeForJob } from "@/app/lib/inventory";
+import { collectorId, entryDate, receiverFor } from "@/app/lib/jobEntry";
 import { bikeNumberRegex, fail, normalizeBikeNumber, ok, parseRange, withAuth } from "@/app/lib/auth";
 import { ACTIVE_STATUSES, JOB_STATUSES, calcTotals, type JobStatus } from "@/app/lib/jobs";
 
@@ -48,10 +49,17 @@ type NewJobBody = {
   status?: JobStatus;
   assignedTo?: string;
   notes?: string;
+  /** Super Admin only: when the job actually happened (defaults to now) */
+  date?: string;
+  /** Who received the cash / payment (defaults to the signed-in user) */
+  collectedBy?: string;
 };
 
 export const POST = withAuth(null, async (req, _ctx, user) => {
   const body: NewJobBody = await req.json();
+
+  const when = entryDate(body.date, user);
+  const collector = await collectorId(body.collectedBy, user);
 
   // 1. Resolve the bike — existing id, or find/create by number
   let bikeId = body.bikeId;
@@ -99,13 +107,16 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
   let paymentType = body.paymentType;
 
   if (body.paymentType !== "due") {
-    if (total > 0) payments.push({ amount: total, mode: body.paymentType, at: new Date(), by: user.id });
+    if (total > 0) {
+      const by = await receiverFor(body.paymentType, body.collectedBy, user);
+      payments.push({ amount: total, mode: body.paymentType, at: when, by });
+    }
     paidAmount = total;
   } else {
     const advance = Math.min(Math.max(0, Number(body.advance) || 0), total);
     if (advance > 0) {
       const mode = body.advanceMode === "online" ? "online" : "cash";
-      payments.push({ amount: advance, mode, at: new Date(), by: user.id });
+      payments.push({ amount: advance, mode, at: when, by: mode === "online" ? await receiverFor(mode, null, user) : collector });
       paidAmount = advance;
       if (advance >= total) paymentType = mode;
     }
@@ -113,9 +124,8 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
   }
 
   const status: JobStatus = JOB_STATUSES.includes(body.status as JobStatus) ? body.status! : "in_progress";
-  const now = new Date();
-
-  const entry = await ServiceEntry.create({
+  // Saved with explicit timestamps so a back-dated job lands on the right day in every report
+  const entry = new ServiceEntry({
     jobNo: await nextSequence("job"),
     bikeId,
     services: items,
@@ -130,9 +140,12 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
     notes: body.notes?.trim() || undefined,
     assignedTo: body.assignedTo || user.id,
     createdBy: user.id,
-    completedAt: status === "completed" || status === "delivered" ? now : undefined,
-    deliveredAt: status === "delivered" ? now : undefined,
+    completedAt: status === "completed" || status === "delivered" ? when : undefined,
+    deliveredAt: status === "delivered" ? when : undefined,
+    createdAt: when,
+    updatedAt: new Date(),
   });
+  await entry.save({ timestamps: false });
 
   // Deduct the consumables these services use; tell the user if anything is now running low
   const lowStock = await consumeForJob(String(entry._id), items.map((i) => String(i.serviceId)), user.id);

@@ -15,7 +15,7 @@ import {
   Wallet,
   Wrench,
 } from "lucide-react";
-import { useLowStock, useSession } from "@/app/components/AppShell";
+import { useLowStock, usePendingHandovers, useSession } from "@/app/components/AppShell";
 import { RankList, RevenueChart, type Report } from "@/app/components/charts";
 import { LowStockAlert } from "@/app/components/inventory";
 import { JobCard } from "@/app/components/jobs";
@@ -95,6 +95,9 @@ export default function DashboardHome() {
           </>
         )}
       </div>
+
+      {/* Cash custody */}
+      <CashCard />
 
       {/* Inventory alert */}
       {isManager && lowStock.items.length > 0 && (
@@ -304,5 +307,58 @@ function SalesReport() {
         </div>
       )}
     </>
+  );
+}
+
+/** Approvers: handovers waiting. Everyone else: cash they are holding, with a nudge to hand it over. */
+function CashCard() {
+  const user = useSession();
+  const { pending } = usePendingHandovers();
+  const approver = can.approveCash(user.role);
+  const today = useMemo(() => rangeQuery(rangeFor("today")), []);
+  const mine = useApi<{ me: { inHand: number; available: number; pending: number } | null }>(approver ? null : `/api/cash?${today}`);
+
+  if (approver) {
+    if (!pending.length) return null;
+    const total = pending.reduce((s, h) => s + h.amount, 0);
+    return (
+      <Link href="/dashboard/cash" className="mt-4 block">
+        <Card className="flex items-center gap-3 border-emerald-200 bg-emerald-50 p-4 transition active:scale-[0.99]">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <Wallet className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-emerald-800">
+              {pending.length} cash handover{pending.length > 1 ? "s" : ""} to approve
+            </p>
+            <p className="truncate text-sm text-slate-600">
+              {inr(total)} from {[...new Set(pending.map((h) => h.from?.name).filter(Boolean))].join(", ")}
+            </p>
+          </div>
+          <ArrowRight className="size-5 text-emerald-600" />
+        </Card>
+      </Link>
+    );
+  }
+
+  const me = mine.data?.me;
+  if (!me || me.inHand <= 0) return null;
+  return (
+    <Link href="/dashboard/cash" className="mt-4 block">
+      <Card className="flex items-center gap-3 p-4 transition active:scale-[0.99]">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+          <Wallet className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-slate-900">
+            Cash in your hand: <span className="tabular-nums">{inr(me.inHand)}</span>
+          </p>
+          <p className="text-sm text-slate-500">
+            {me.pending > 0 ? `${inr(me.pending)} waiting for approval` : "Hand it over to the Super Admin / Admin at end of day"}
+          </p>
+        </div>
+        <ArrowRight className="size-5 text-slate-400" />
+      </Card>
+    </Link>
   );
 }

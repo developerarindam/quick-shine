@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { clearApiCache } from "@/app/lib/api";
 
 export default function LogoutPage() {
   const router = useRouter();
@@ -11,6 +12,12 @@ export default function LogoutPage() {
     // Clean up tokens stored by older versions of the app
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    clearApiCache();
+    try {
+      sessionStorage.clear();
+    } catch {
+      // storage unavailable
+    }
 
     fetch("/api/logout", { method: "POST" }).finally(() => {
       router.replace("/login");

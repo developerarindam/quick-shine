@@ -32,9 +32,45 @@ export async function api<T = unknown>(url: string, opts: ApiOptions = {}): Prom
   return json.data as T;
 }
 
-/** Loads `url` (pass null to skip). Keeps previous data visible while reloading. */
+/**
+ * Today's date as a string that changes when the calendar day changes — while the app
+ * stays open past midnight or comes back from the background. Use it as a memo
+ * dependency so "today" ranges roll over by themselves.
+ */
+export function useDayKey() {
+  const [key, setKey] = useState(() => new Date().toDateString());
+  useEffect(() => {
+    const check = () => setKey(new Date().toDateString());
+    const timer = setInterval(check, 30_000);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, []);
+  return key;
+}
+
+// Last response per URL for this browser tab. Pages show it instantly when you come
+// back to them, then refresh in the background (stale-while-revalidate).
+const responseCache = new Map<string, unknown>();
+
+/** Put fresh data for a URL in the cache, e.g. the saved record after an edit. */
+export function primeApiCache(url: string, data: unknown) {
+  responseCache.set(url, data);
+}
+
+/** Forget cached responses — call on logout so the next user never sees them. */
+export function clearApiCache() {
+  responseCache.clear();
+}
+
+/**
+ * Loads `url` (pass null to skip). Shows the cached copy straight away if this URL was
+ * loaded before, keeps previous data visible while reloading, and always revalidates.
+ */
 export function useApi<T>(url: string | null) {
-  const [data, setData] = useState<T | undefined>(undefined);
+  const [data, setDataState] = useState<T | undefined>(() => (url ? (responseCache.get(url) as T | undefined) : undefined));
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(!!url);
   const reqId = useRef(0);
@@ -42,11 +78,13 @@ export function useApi<T>(url: string | null) {
   const load = useCallback(async () => {
     if (!url) return;
     const id = ++reqId.current;
+    if (responseCache.has(url)) setDataState(responseCache.get(url) as T);
     setLoading(true);
     setError("");
     try {
       const result = await api<T>(url);
-      if (id === reqId.current) setData(result);
+      responseCache.set(url, result);
+      if (id === reqId.current) setDataState(result);
     } catch (e) {
       if (id === reqId.current) setError((e as Error).message);
     } finally {
@@ -57,6 +95,17 @@ export function useApi<T>(url: string | null) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Local edits (optimistic updates) also update the cached copy
+  const setData = useCallback(
+    (next: T | undefined | ((prev: T | undefined) => T | undefined)) =>
+      setDataState((prev) => {
+        const value = typeof next === "function" ? (next as (p: T | undefined) => T | undefined)(prev) : next;
+        if (url) responseCache.set(url, value);
+        return value;
+      }),
+    [url]
+  );
 
   return { data, setData, error, loading, reload: load };
 }

@@ -22,6 +22,10 @@ export const MANAGERS: Role[] = ["ADMIN", "MANAGER"];
 export const can = {
   manageUsers: (role: Role) => role === "ADMIN",
   manageStudio: (role: Role) => MANAGERS.includes(role),
+  /** Back-date new jobs and correct past jobs (dates, services, payments) — Super Admin only. */
+  editHistory: (role: Role) => role === "ADMIN",
+  /** Approve cash handovers. */
+  approveCash: (role: Role) => MANAGERS.includes(role),
 };
 
 export type SessionUser = {

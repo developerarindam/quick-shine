@@ -59,6 +59,13 @@ export function endOfDay(d: Date) {
   return x;
 }
 
+/** yyyy-mm-ddThh:mm in local time, for <input type="datetime-local"> */
+export function toDateTimeInput(d: Date | string) {
+  const x = new Date(d);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${toDateInput(x)}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
+}
+
 /** yyyy-mm-dd in local time, for <input type="date"> */
 export function toDateInput(d: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -70,12 +77,13 @@ export function fromDateInput(s: string) {
   return new Date(y, m - 1, d);
 }
 
-export type RangePreset = "today" | "yesterday" | "week" | "month" | "lastMonth" | "custom";
+export type RangePreset = "today" | "yesterday" | "week" | "last30" | "month" | "lastMonth" | "custom";
 
 export const RANGE_LABEL: Record<RangePreset, string> = {
   today: "Today",
   yesterday: "Yesterday",
   week: "Last 7 days",
+  last30: "Last 30 days",
   month: "This month",
   lastMonth: "Last month",
   custom: "Custom",
@@ -97,6 +105,11 @@ export function rangeFor(preset: Exclude<RangePreset, "custom">): DateRange {
       const w = new Date(now);
       w.setDate(w.getDate() - 6);
       return { from: startOfDay(w), to: endOfDay(now) };
+    }
+    case "last30": {
+      const m = new Date(now);
+      m.setDate(m.getDate() - 29);
+      return { from: startOfDay(m), to: endOfDay(now) };
     }
     case "month":
       return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: endOfDay(now) };

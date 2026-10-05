@@ -36,7 +36,10 @@ async function dbConnect(): Promise<typeof mongoose> {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      maxIdleTimeMS: 5000,
+      // Keep connections open between taps: reconnecting to Atlas costs ~1.5s, and with 5s
+      // nearly every action in a quiet studio paid it. attachDatabasePool still lets Vercel
+      // drain idle connections before suspending the function. Override with DB_MAX_IDLE_MS.
+      maxIdleTimeMS: Number(process.env.DB_MAX_IDLE_MS) || 60_000,
       dbName: process.env.DB_NAME || "QuickShine", // 🔥 explicitly setting DB here (DB_NAME overrides, e.g. for a test database)
     };
 

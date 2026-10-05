@@ -1,6 +1,6 @@
 import User from "@/app/models/User";
 import ServiceEntry from "@/app/models/ServiceEntry";
-import { fail, ok, withAuth } from "@/app/lib/auth";
+import { clearSessionCache, fail, ok, withAuth } from "@/app/lib/auth";
 import { ROLES, type Role } from "@/app/lib/roles";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -28,6 +28,7 @@ export const PUT = withAuth<Ctx>(["ADMIN"], async (req, { params }, session) => 
   }
 
   await user.save();
+  clearSessionCache();
   const safe = user.toObject() as unknown as Record<string, unknown>;
   delete safe.password;
   return ok(safe);
@@ -41,10 +42,12 @@ export const DELETE = withAuth<Ctx>(["ADMIN"], async (_req, { params }, session)
   if (hasJobs) {
     // Keep history intact — disable instead of deleting
     await User.findByIdAndUpdate(id, { status: "Inactive" });
+    clearSessionCache();
     return ok(null, { message: "User has job history, so the account was disabled instead" });
   }
 
   const deleted = await User.findByIdAndDelete(id);
+  clearSessionCache();
   if (!deleted) return fail("User not found", 404);
   return ok(null, { message: "User deleted" });
 });

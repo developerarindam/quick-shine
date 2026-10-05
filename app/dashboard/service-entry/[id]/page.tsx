@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Check, ChevronRight, IndianRupee, MessageCircle, Phone, Printer, Save, Trash2 } from "lucide-react";
+import { Check, ChevronRight, IndianRupee, MessageCircle, Pencil, Phone, Printer, Save, Trash2 } from "lucide-react";
 import { useSession } from "@/app/components/AppShell";
 import { PayBadge, whatsappLink } from "@/app/components/jobs";
 import { Sheet, useConfirm, useToast } from "@/app/components/overlays";
@@ -13,6 +13,7 @@ import {
   ErrorState,
   Field,
   IconButton,
+  Input,
   ListSkeleton,
   MoneyInput,
   Page,
@@ -25,9 +26,11 @@ import {
   cn,
 } from "@/app/components/ui";
 import { api, useApi } from "@/app/lib/api";
+import { LIST_KEYS, useListBackHref } from "@/app/lib/listState";
+import { OnlinePayeeNote } from "@/app/components/OnlinePayeeNote";
 import { can } from "@/app/lib/roles";
 import { JOB_STATUSES, STATUS_META, balanceOf, jobLabel, paidOf, type JobStatus, type PaymentMode } from "@/app/lib/jobs";
-import { fmtDateTime, fmtWhen, inr, phoneDigits } from "@/app/lib/format";
+import { fmtDateTime, fmtWhen, inr, phoneDigits, toDateTimeInput } from "@/app/lib/format";
 import { serviceName, type Job, type TeamMember } from "@/app/lib/types";
 
 export default function JobDetailPage() {
@@ -36,6 +39,8 @@ export default function JobDetailPage() {
   const user = useSession();
   const toast = useToast();
   const confirm = useConfirm();
+  // back to the job list exactly as it was filtered (date range, tab, search)
+  const backHref = useListBackHref(LIST_KEYS.jobs, "/dashboard/service-entry");
 
   const { data: job, setData: setJob, loading, error, reload } = useApi<Job>(`/api/service-entry/${id}`);
   const team = useApi<TeamMember[]>("/api/users?lite=1");
@@ -90,14 +95,14 @@ export default function JobDetailPage() {
 
   if (error) {
     return (
-      <Page title="Job" back="/dashboard/service-entry">
+      <Page title="Job" back={backHref}>
         <ErrorState message={error} onRetry={reload} />
       </Page>
     );
   }
   if (loading || !job) {
     return (
-      <Page title="Job" back="/dashboard/service-entry">
+      <Page title="Job" back={backHref}>
         <ListSkeleton rows={4} />
       </Page>
     );
@@ -114,9 +119,19 @@ export default function JobDetailPage() {
     <Page
       title={`Job ${jobLabel(job)}`}
       subtitle={fmtDateTime(job.createdAt)}
-      back="/dashboard/service-entry"
+      back={backHref}
       actions={
         <>
+          {can.editHistory(user.role) && (
+            <Link
+              href={`/dashboard/service-entry/${id}/edit`}
+              aria-label="Edit job"
+              title="Edit job (Super Admin)"
+              className="inline-flex size-10 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"
+            >
+              <Pencil className="size-5" />
+            </Link>
+          )}
           <IconButton label="Print receipt" onClick={() => window.print()} className="max-sm:hidden">
             <Printer className="size-5" />
           </IconButton>
@@ -319,8 +334,11 @@ export default function JobDetailPage() {
         open={payOpen}
         onClose={() => setPayOpen(false)}
         balance={due}
-        onSubmit={async (amount, mode) => {
-          const ok = await patch({ action: "pay", amount, mode }, `${inr(amount)} received`, "pay");
+        team={team.data || []}
+        meId={user.id}
+        canBackdate={can.editHistory(user.role)}
+        onSubmit={async (payment) => {
+          const ok = await patch({ action: "pay", ...payment }, `${inr(payment.amount)} received`, "pay");
           if (ok) setPayOpen(false);
         }}
         loading={busy === "pay"}
@@ -342,17 +360,25 @@ function CollectSheet({
   open,
   onClose,
   balance,
+  team,
+  meId,
+  canBackdate,
   onSubmit,
   loading,
 }: {
   open: boolean;
   onClose: () => void;
   balance: number;
-  onSubmit: (amount: number, mode: PaymentMode) => void;
+  team: TeamMember[];
+  meId: string;
+  canBackdate: boolean;
+  onSubmit: (payment: { amount: number; mode: PaymentMode; collectedBy: string; at?: string }) => void;
   loading: boolean;
 }) {
   const [amount, setAmount] = useState(String(balance));
   const [mode, setMode] = useState<PaymentMode>("cash");
+  const [collectedBy, setCollectedBy] = useState(meId);
+  const [at, setAt] = useState("");
 
   const close = () => {
     setAmount(String(balance));
@@ -365,7 +391,8 @@ function CollectSheet({
       onClose={close}
       title="Collect payment"
       footer={
-        <Button size="lg" variant="success" className="w-full" loading={loading} onClick={() => onSubmit(Number(amount), mode)}>
+        <Button size="lg" variant="success" className="w-full" loading={loading} onClick={() => onSubmit({ amount: Number(amount), mode, collectedBy, at: at ? new Date(at).toISOString() : undefined })}
+        >
           Receive {inr(Number(amount) || 0)}
         </Button>
       }
@@ -384,6 +411,25 @@ function CollectSheet({
             ]}
           />
         </Field>
+        {mode === "online" ? (
+          <OnlinePayeeNote />
+        ) : (
+          <Field label="Cash collected by" hint="They hold this cash until they hand it over">
+            <Select value={collectedBy} onChange={(e) => setCollectedBy(e.target.value)}>
+              {(team.length ? team : [{ _id: meId, name: "Me" }]).map((m) => (
+                <option key={m._id} value={m._id}>
+                  {m.name}
+                  {m._id === meId ? " (me)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
+        {canBackdate && (
+          <Field label="Received on" hint="Leave empty for now">
+            <Input type="datetime-local" value={at} max={toDateTimeInput(new Date())} onChange={(e) => setAt(e.target.value)} />
+          </Field>
+        )}
       </div>
     </Sheet>
   );

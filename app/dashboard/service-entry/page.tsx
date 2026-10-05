@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, Plus } from "lucide-react";
 import { useSession } from "@/app/components/AppShell";
 import { JobCard } from "@/app/components/jobs";
 import { Card, Chips, EmptyState, ErrorState, Input, ListSkeleton, Page, SearchInput, Segmented, buttonClass } from "@/app/components/ui";
-import { useApi } from "@/app/lib/api";
+import { useApi, useDayKey } from "@/app/lib/api";
+import { LIST_KEYS, rememberListUrl } from "@/app/lib/listState";
 import { can } from "@/app/lib/roles";
 import { ACTIVE_STATUSES, STATUS_META, balanceOf, type JobStatus } from "@/app/lib/jobs";
 import {
@@ -24,6 +25,10 @@ import type { Job } from "@/app/lib/types";
 
 type Tab = "active" | "history" | "due";
 
+const TABS: Tab[] = ["active", "history", "due"];
+const PRESETS: RangePreset[] = ["today", "yesterday", "week", "month", "custom"];
+const isDate = (v: string | null): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 export default function JobsPage() {
   return (
     <Suspense>
@@ -36,23 +41,63 @@ function JobsList() {
   const user = useSession();
   const showMoney = can.manageStudio(user.role);
   const params = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const dayKey = useDayKey();
+  const today = toDateInput(new Date());
 
-  const initialTab = (params.get("tab") as Tab) || "active";
-  const [tab, setTab] = useState<Tab>(["active", "history", "due"].includes(initialTab) ? initialTab : "active");
-  const [statusFilter, setStatusFilter] = useState<"all" | JobStatus>((params.get("status") as JobStatus) || "all");
-  const [preset, setPreset] = useState<RangePreset>("today");
-  const [customDay, setCustomDay] = useState(toDateInput(new Date()));
-  const [search, setSearch] = useState("");
+  // Filters live in the URL so refresh, back and "return from a job" keep them:
+  // ?tab=history&range=custom&from=2026-10-01&to=2026-10-03&q=wb02
+  const tab: Tab = TABS.includes(params.get("tab") as Tab) ? (params.get("tab") as Tab) : "active";
+  const statusParam = params.get("status") as JobStatus | null;
+  const statusFilter: "all" | JobStatus = statusParam && ACTIVE_STATUSES.includes(statusParam) ? statusParam : "all";
+  const preset: RangePreset = PRESETS.includes(params.get("range") as RangePreset) ? (params.get("range") as RangePreset) : "today";
+  const customFrom = isDate(params.get("from")) ? params.get("from")! : today;
+  const customTo = isDate(params.get("to")) ? params.get("to")! : today;
+
+  const setParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(params.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v === null || v === "") next.delete(k);
+        else next.set(k, v);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router]
+  );
+  const setTab = (t: Tab) => setParams({ tab: t === "active" ? null : t });
+  const setStatusFilter = (s: "all" | JobStatus) => setParams({ status: s === "all" ? null : s });
+  const setPreset = (p: RangePreset) =>
+    setParams(p === "custom" ? { range: p, from: customFrom, to: customTo } : { range: p === "today" ? null : p, from: null, to: null });
+
+  // Search updates the screen instantly and the URL shortly after typing stops
+  const qParam = params.get("q") || "";
+  const [search, setSearch] = useState(qParam);
+  useEffect(() => {
+    if (search === qParam) return;
+    const t = setTimeout(() => setParams({ q: search.trim() || null }), 400);
+    return () => clearTimeout(t);
+  }, [search, qParam, setParams]);
+
+  // Remember this exact view for the job page's back arrow
+  const listUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+  useEffect(() => {
+    rememberListUrl(LIST_KEYS.jobs, listUrl);
+  }, [listUrl]);
 
   const url = useMemo(() => {
     if (tab === "active") return "/api/service-entry?view=active";
     if (tab === "due") return "/api/service-entry?view=due";
     const range =
       preset === "custom"
-        ? { from: fromDateInput(customDay), to: endOfDay(fromDateInput(customDay)) }
-        : rangeFor(preset);
+        ? { from: fromDateInput(customFrom), to: endOfDay(fromDateInput(customTo)) }
+        : rangeFor(preset as Exclude<RangePreset, "custom">);
     return `/api/service-entry?${rangeQuery(range)}`;
-  }, [tab, preset, customDay]);
+    // dayKey: "today" / "yesterday" move to the new day after midnight
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, preset, customFrom, customTo, dayKey]);
 
   const { data, loading, error, reload } = useApi<Job[]>(url);
 
@@ -116,13 +161,29 @@ function JobsList() {
             <Chips
               value={preset}
               onChange={setPreset}
-              options={(["today", "yesterday", "week", "month", "custom"] as RangePreset[]).map((p) => ({
+              options={PRESETS.map((p) => ({
                 value: p,
-                label: RANGE_LABEL[p],
+                label: p === "custom" ? "Date range" : RANGE_LABEL[p],
               }))}
             />
             {preset === "custom" && (
-              <Input type="date" value={customDay} max={toDateInput(new Date())} onChange={(e) => e.target.value && setCustomDay(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  type="date"
+                  aria-label="From date"
+                  value={customFrom}
+                  max={customTo}
+                  onChange={(e) => e.target.value && setParams({ from: e.target.value })}
+                />
+                <Input
+                  type="date"
+                  aria-label="To date"
+                  value={customTo}
+                  min={customFrom}
+                  max={today}
+                  onChange={(e) => e.target.value && setParams({ to: e.target.value })}
+                />
+              </div>
             )}
           </>
         )}

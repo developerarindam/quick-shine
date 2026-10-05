@@ -110,3 +110,28 @@ export function serviceName(s: Job["services"][number]) {
   if (s.serviceId && typeof s.serviceId === "object") return s.serviceId.name;
   return "Service";
 }
+
+export type CashPosition = {
+  userId: string;
+  name: string;
+  role: Role;
+  collected: number;
+  received: number;
+  handedOver: number;
+  spent: number;
+  pending: number;
+  inHand: number;
+  available: number;
+};
+
+export type Handover = {
+  _id: string;
+  from: { _id: string; name: string; role?: Role } | null;
+  to?: NamedRef;
+  amount: number;
+  note?: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reason?: string;
+  createdAt: string;
+  decidedAt?: string;
+};

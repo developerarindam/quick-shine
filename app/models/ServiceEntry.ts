@@ -93,6 +93,9 @@ const ServiceEntrySchema = new mongoose.Schema(
 
 ServiceEntrySchema.index({ createdAt: -1 });
 ServiceEntrySchema.index({ bikeId: 1, createdAt: -1 });
+// payment-date queries (collections, cash, bike totals) and the Dues tab
+ServiceEntrySchema.index({ "payments.at": 1 });
+ServiceEntrySchema.index({ paymentType: 1 });
 
 /**
  * Fill in fields that entries created by older versions of the app don't have.
@@ -145,15 +148,6 @@ export async function hydrateJobs<T extends Record<string, any>>(jobs: T[], opts
     })
   );
 }
-
-/** Standard populate for job responses */
-export const JOB_POPULATE = [
-  { path: "bikeId" },
-  { path: "services.serviceId", select: "name" },
-  { path: "assignedTo", select: "name" },
-  { path: "createdBy", select: "name" },
-  { path: "payments.by", select: "name" },
-];
 
 export default mongoose.models.ServiceEntry ||
   mongoose.model("ServiceEntry", ServiceEntrySchema);
