@@ -27,6 +27,16 @@ const AttendanceSchema = new mongoose.Schema(
     },
     signIn: { type: PunchSchema, required: true },
     signOut: { type: PunchSchema },
+    // Breaks taken during the shift (e.g. going home for lunch). An open break has no `end`.
+    breaks: [
+      new mongoose.Schema(
+        {
+          start: { type: PunchSchema, required: true },
+          end: { type: PunchSchema },
+        },
+        { _id: false }
+      ),
+    ],
     // set when the Super Admin adds or corrects the entry
     manual: { type: Boolean, default: false },
     editedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

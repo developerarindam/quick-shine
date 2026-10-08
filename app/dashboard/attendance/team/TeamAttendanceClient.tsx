@@ -1,14 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Crosshair, ExternalLink, IndianRupee, MapPin, Pencil, Plus, Trash2, UserCheck, UserX, Wallet } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Coffee, Crosshair, ExternalLink, IndianRupee, MapPin, Pencil, Plus, Trash2, UserCheck, Wallet } from "lucide-react";
 import { useSession } from "@/app/components/AppShell";
-import { ShiftRow } from "@/app/components/attendance";
+import { ShiftRow, StatusPill } from "@/app/components/attendance";
 import { Sheet, useConfirm, useToast } from "@/app/components/overlays";
 import { PeriodPicker, usePeriod } from "@/app/components/PeriodPicker";
-import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Field, Input, ListSkeleton, MoneyInput, Page, SectionTitle, Segmented, Select, cn } from "@/app/components/ui";
+import { Avatar, Button, Card, EmptyState, ErrorState, Field, Input, ListSkeleton, MoneyInput, Page, SectionTitle, Segmented, Select, cn } from "@/app/components/ui";
 import { api, useApi } from "@/app/lib/api";
-import { fmtHours, PAY_LABEL, shiftHours, type PayType } from "@/app/lib/attendanceShared";
+import { fmtHours, openBreak, PAY_LABEL, shiftHours, workStatus, workedSoFar, type PayType } from "@/app/lib/attendanceShared";
 import { fmtDate, fmtTime, fmtWhen, inr, rangeFor, rangeQuery, toDateTimeInput } from "@/app/lib/format";
 import { getPosition, mapsLink } from "@/app/lib/geo";
 import { ROLE_LABEL, can, type Role } from "@/app/lib/roles";
@@ -34,7 +35,10 @@ const nameOf = (s: Shift) => (typeof s.user === "object" ? s.user.name : "");
 export default function TeamAttendanceClient() {
   const user = useSession();
   const superAdmin = can.editHistory(user.role);
-  const [tab, setTab] = useState<Tab>("today");
+  // ?tab=location etc. opens a tab directly (e.g. from the "set shop location" button)
+  const asked = useSearchParams().get("tab") as Tab | null;
+  const allowed: Tab[] = superAdmin ? ["today", "register", "payroll", "location"] : ["today", "register"];
+  const [tab, setTab] = useState<Tab>(asked && allowed.includes(asked) ? asked : "today");
 
   const tabs: { value: Tab; label: string }[] = [
     { value: "today", label: "Today" },
@@ -68,51 +72,53 @@ function TodayBoard() {
   if (error) return <ErrorState message={error} onRetry={reload} />;
   if (!data) return <ListSkeleton rows={4} />;
 
-  const present = data.board.filter((b) => b.today).length;
+  const counts = { online: 0, break: 0, out: 0, absent: 0 };
+  for (const b of data.board) counts[workStatus(b.today)] += 1;
+  const tiles = [
+    { key: "online", label: "Online", cls: "text-emerald-600" },
+    { key: "break", label: "On break", cls: "text-amber-600" },
+    { key: "out", label: "Left", cls: "text-slate-700" },
+    { key: "absent", label: "Not in", cls: "text-red-600" },
+  ] as const;
   return (
     <>
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-3 text-center">
-          <p className="text-2xl font-bold text-emerald-600">{data.board.filter((b) => b.today && !b.today.signOut).length}</p>
-          <p className="text-xs text-slate-500">At work</p>
-        </Card>
-        <Card className="p-3 text-center">
-          <p className="text-2xl font-bold text-slate-700">{data.board.filter((b) => b.today?.signOut).length}</p>
-          <p className="text-xs text-slate-500">Left</p>
-        </Card>
-        <Card className="p-3 text-center">
-          <p className="text-2xl font-bold text-red-600">{data.board.length - present}</p>
-          <p className="text-xs text-slate-500">Not in</p>
-        </Card>
+      <div className="grid grid-cols-4 gap-2">
+        {tiles.map((t) => (
+          <Card key={t.key} className="p-3 text-center">
+            <p className={cn("text-2xl font-bold", t.cls)}>{counts[t.key]}</p>
+            <p className="text-[11px] text-slate-500">{t.label}</p>
+          </Card>
+        ))}
       </div>
       <Card className="mt-3 divide-y divide-slate-100">
-        {data.board.map(({ user: m, today }) => (
-          <div key={m._id} className="flex items-center gap-3 px-4 py-3">
-            <Avatar name={m.name} className="size-9 text-xs" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-slate-800">{m.name}</p>
-              <p className="text-xs text-slate-500">{ROLE_LABEL[m.role]}</p>
-            </div>
-            {!today ? (
-              <Badge tone="red">
-                <UserX className="size-3" /> Not signed in
-              </Badge>
-            ) : !today.signOut ? (
-              <div className="text-right">
-                <Badge tone="green">
-                  <UserCheck className="size-3" /> In since {fmtTime(today.signIn.at)}
-                </Badge>
-              </div>
-            ) : (
-              <div className="text-right text-xs text-slate-500">
-                <p className="font-semibold tabular-nums text-slate-800">
-                  {fmtTime(today.signIn.at)} – {fmtTime(today.signOut.at)}
+        {data.board.map(({ user: m, today }) => {
+          const st = workStatus(today);
+          const br = openBreak(today);
+          return (
+            <div key={m._id} className="flex items-center gap-3 px-4 py-3">
+              <span className="relative">
+                <Avatar name={m.name} className="size-9 text-xs" />
+                <span
+                  className={cn(
+                    "absolute -bottom-0.5 -right-0.5 size-3 rounded-full ring-2 ring-white",
+                    st === "online" ? "bg-emerald-500" : st === "break" ? "bg-amber-500" : st === "out" ? "bg-slate-400" : "bg-red-400"
+                  )}
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-slate-800">{m.name}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {!today
+                    ? ROLE_LABEL[m.role]
+                    : today.signOut
+                      ? `${fmtTime(today.signIn.at)} – ${fmtTime(today.signOut.at)} · ${fmtHours(shiftHours(today))}`
+                      : `In ${fmtTime(today.signIn.at)} · worked ${fmtHours(workedSoFar(today))}${today.breaks?.length ? ` · ${today.breaks.length} break(s)` : ""}`}
                 </p>
-                <p>{fmtHours(shiftHours(today))}</p>
               </div>
-            )}
-          </div>
-        ))}
+              <StatusPill status={st} since={br?.start.at} />
+            </div>
+          );
+        })}
       </Card>
     </>
   );
@@ -189,6 +195,7 @@ function ShiftSheet({ open, shift, team, onClose, onSaved }: { open: boolean; sh
   const [signIn, setSignIn] = useState("");
   const [signOut, setSignOut] = useState("");
   const [note, setNote] = useState("");
+  const [breaks, setBreaks] = useState<{ start: string; end: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [lastKey, setLastKey] = useState<string | null>(null);
 
@@ -203,13 +210,19 @@ function ShiftSheet({ open, shift, team, onClose, onSaved }: { open: boolean; sh
       setSignIn(toDateTimeInput(shift ? shift.signIn.at : nineAm));
       setSignOut(shift?.signOut ? toDateTimeInput(shift.signOut.at) : "");
       setNote(shift?.note || "");
+      setBreaks((shift?.breaks || []).map((b) => ({ start: toDateTimeInput(b.start.at), end: b.end ? toDateTimeInput(b.end.at) : "" })));
     }
   }
 
   const save = async () => {
     setSaving(true);
     try {
-      const body = { signIn: new Date(signIn).toISOString(), signOut: signOut ? new Date(signOut).toISOString() : null, note };
+      const body = {
+        signIn: new Date(signIn).toISOString(),
+        signOut: signOut ? new Date(signOut).toISOString() : null,
+        breaks: breaks.filter((b) => b.start).map((b) => ({ start: new Date(b.start).toISOString(), end: b.end ? new Date(b.end).toISOString() : undefined })),
+        note,
+      };
       if (shift) await api(`/api/attendance/${shift._id}`, { method: "PUT", body });
       else await api("/api/attendance", { method: "POST", body: { ...body, userId } });
       toast(shift ? "Attendance corrected" : "Attendance added");
@@ -271,6 +284,56 @@ function ShiftSheet({ open, shift, team, onClose, onSaved }: { open: boolean; sh
         <Field label="Signed out at" hint="Leave empty if they're still at work">
           <Input type="datetime-local" value={signOut} min={signIn} onChange={(e) => setSignOut(e.target.value)} />
         </Field>
+        <div>
+          <p className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+            <Coffee className="size-4" /> Breaks
+          </p>
+          <div className="space-y-2">
+            {breaks.map((b, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  type="datetime-local"
+                  aria-label={`Break ${i + 1} start`}
+                  value={b.start}
+                  min={signIn}
+                  onChange={(e) => setBreaks((l) => l.map((x, j) => (j === i ? { ...x, start: e.target.value } : x)))}
+                  className="min-w-0 flex-1 px-2 text-sm"
+                />
+                <span className="text-slate-400">→</span>
+                <Input
+                  type="datetime-local"
+                  aria-label={`Break ${i + 1} end`}
+                  value={b.end}
+                  min={b.start}
+                  onChange={(e) => setBreaks((l) => l.map((x, j) => (j === i ? { ...x, end: e.target.value } : x)))}
+                  className="min-w-0 flex-1 px-2 text-sm"
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove break ${i + 1}`}
+                  onClick={() => setBreaks((l) => l.filter((_, j) => j !== i))}
+                  className="flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
+            ))}
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus className="size-4" />}
+              onClick={() => {
+                const base = new Date(signIn || Date.now());
+                const start = new Date(base);
+                start.setHours(13, 0, 0, 0);
+                const end = new Date(start.getTime() + 60 * 60_000);
+                setBreaks((l) => [...l, { start: toDateTimeInput(start), end: toDateTimeInput(end) }]);
+              }}
+            >
+              Add break
+            </Button>
+          </div>
+        </div>
         <Field label="Reason / note">
           <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Forgot to sign out" />
         </Field>

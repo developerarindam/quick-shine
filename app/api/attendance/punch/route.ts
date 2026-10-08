@@ -1,12 +1,12 @@
-// Sign in / sign out at the shop. GPS must be inside the shop radius, and only
-// today's shift can be punched — a missed punch can only be fixed by the Super Admin.
+// Sign in / out and start / end breaks at the shop. GPS must be inside the shop radius,
+// and only today's shift can be punched — a missed punch can only be fixed by the Super Admin.
 import Attendance from "@/app/models/Attendance";
 import { fail, ok, withAuth } from "@/app/lib/auth";
 import { dayKey, insideShop, shopLocation } from "@/app/lib/attendance";
 
 export const POST = withAuth(null, async (req, _ctx, user) => {
   const { action, lat, lng, accuracy } = await req.json();
-  if (action !== "in" && action !== "out") return fail("Unknown action");
+  if (!["in", "out", "break_start", "break_end"].includes(action)) return fail("Unknown action");
 
   const shop = await shopLocation();
   if (!shop) return fail("The shop location hasn't been set yet. Ask the Super Admin to set it under Attendance → Shop location.");
@@ -19,7 +19,8 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
   const { inside, distance } = insideShop(shop, pos);
   if (!inside) {
     const away = distance >= 1000 ? `${(distance / 1000).toFixed(1)} km` : `${distance} m`;
-    return fail(`You're ${away} from the shop. You can only sign ${action} at the shop (within ${shop.radius} m).`, 403);
+    const what = action === "in" ? "sign in" : action === "out" ? "sign out" : action === "break_start" ? "start a break" : "end your break";
+    return fail(`You're ${away} from the shop. You can only ${what} at the shop (within ${shop.radius} m).`, 403);
   }
 
   const now = new Date();
@@ -35,7 +36,18 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
 
   if (!existing) return fail("You haven't signed in today", 409);
   if (existing.signOut?.at) return fail("You've already signed out today", 409);
-  existing.signOut = punch;
+  const open = existing.breaks?.find((b: { end?: unknown }) => !b.end);
+
+  if (action === "break_start") {
+    if (open) return fail("You're already on a break", 409);
+    existing.breaks.push({ start: punch });
+  } else if (action === "break_end") {
+    if (!open) return fail("You're not on a break", 409);
+    open.end = punch;
+  } else {
+    if (open) return fail("End your break first, then sign out", 409);
+    existing.signOut = punch;
+  }
   await existing.save();
   return ok(existing);
 });

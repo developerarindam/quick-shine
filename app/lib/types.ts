@@ -144,6 +144,7 @@ export type Shift = {
   date: string;
   signIn: Punch;
   signOut?: Punch;
+  breaks?: { start: Punch; end?: Punch }[];
   manual?: boolean;
   editedBy?: NamedRef;
   editedAt?: string;

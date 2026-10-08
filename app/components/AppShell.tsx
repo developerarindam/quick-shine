@@ -124,14 +124,9 @@ export default function AppShell({ user, children }: { user: SessionUser; childr
         <div className="min-h-dvh">
           {/* ── Desktop sidebar ── */}
           <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex print:hidden">
-            <Link href="/dashboard" className="flex h-20 items-center gap-3 px-6">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-brand-600 text-white">
-                <Sparkles className="size-5" />
-              </span>
-              <span>
-                <span className="block text-lg font-extrabold leading-tight text-slate-900">Quick Shine</span>
-                <span className="block text-xs text-slate-500">Detailing Studio</span>
-              </span>
+            <Link href="/dashboard" className="flex h-24 items-center px-6" aria-label="Quick Shine home">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.svg" alt="Quick Shine" width={120} height={81} className="h-16 w-auto" />
             </Link>
 
             <div className="px-4 pb-4">

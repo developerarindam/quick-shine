@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Award, Clock, Droplets, IndianRupee, MapPin, Phone, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { Award, Clock, Droplets, IndianRupee, MapPin, Phone, ShieldCheck, Wrench } from "lucide-react";
 import dbConnect from "@/app/lib/dbConnect";
 import Service from "@/app/models/Service";
 import { inr } from "@/app/lib/format";
@@ -34,11 +34,9 @@ export default async function Home() {
       {/* Navbar */}
       <nav className="sticky top-0 z-30 border-b border-slate-100 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-brand-600 text-white">
-              <Sparkles className="size-5" />
-            </span>
-            <span className="text-lg font-extrabold text-slate-900">Quick Shine</span>
+          <Link href="/" className="flex items-center" aria-label="Quick Shine home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="Quick Shine" width={72} height={48} className="h-12 w-auto" />
           </Link>
           <div className="flex items-center gap-6">
             <div className="hidden items-center gap-6 text-sm font-medium text-slate-600 sm:flex">

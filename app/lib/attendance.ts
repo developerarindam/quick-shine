@@ -35,3 +35,33 @@ export function insideShop(shop: ShopLocation, pos: { lat: number; lng: number; 
   const slack = Math.min(Math.max(pos.accuracy || 0, 0), 50);
   return { inside: distance - slack <= shop.radius, distance };
 }
+
+/**
+ * Validate breaks sent by the Super Admin: [{ start: ISO, end?: ISO }].
+ * Each must sit inside the shift, end after it starts, and not overlap the next.
+ * Returns them sorted, or throws a message for the user.
+ */
+export function cleanBreaks(raw: unknown, signIn: Date, signOut: Date | null, existing: { start: { at: Date }; end?: { at: Date } }[] = []) {
+  if (!Array.isArray(raw)) return null;
+  const list = raw.map((b, i) => {
+    const start = new Date(b?.start);
+    const end = b?.end ? new Date(b.end) : null;
+    if (Number.isNaN(start.getTime()) || (end && Number.isNaN(end.getTime()))) throw new Error(`Break ${i + 1} has an invalid time`);
+    if (end && end <= start) throw new Error(`Break ${i + 1} must end after it starts`);
+    if (start < signIn) throw new Error(`Break ${i + 1} starts before sign-in`);
+    if (signOut && (start >= signOut || (end && end > signOut))) throw new Error(`Break ${i + 1} must be before sign-out`);
+    if (signOut && !end) throw new Error(`Break ${i + 1} needs an end time (the shift is signed out)`);
+    // keep the GPS details of punches whose time didn't change
+    const same = existing.find((e) => e.start.at.getTime() === start.getTime());
+    return {
+      start: same ? { ...same.start, at: start } : { at: start },
+      ...(end ? { end: same?.end && same.end.at.getTime() === end.getTime() ? same.end : { at: end } } : {}),
+    };
+  });
+  list.sort((a, b) => a.start.at.getTime() - b.start.at.getTime());
+  for (let i = 1; i < list.length; i++) {
+    const prevEnd = list[i - 1].end?.at;
+    if (!prevEnd || prevEnd > list[i].start.at) throw new Error("Breaks overlap — check the times");
+  }
+  return list;
+}

@@ -2,7 +2,8 @@
 import Attendance from "@/app/models/Attendance";
 import User from "@/app/models/User";
 import { fail, ok, parseRange, withAuth } from "@/app/lib/auth";
-import { dayKey } from "@/app/lib/attendance";
+import { cleanBreaks, dayKey } from "@/app/lib/attendance";
+import { InputError } from "@/app/lib/jobEntry";
 import { MANAGERS } from "@/app/lib/roles";
 
 export const GET = withAuth(MANAGERS, async (req) => {
@@ -27,15 +28,22 @@ export const GET = withAuth(MANAGERS, async (req) => {
   });
 });
 
-/** Super Admin: add a missed shift. Body: { userId, signIn: ISO, signOut?: ISO, note? } */
+/** Super Admin: add a missed shift. Body: { userId, signIn: ISO, signOut?: ISO, breaks?: [{start, end?}], note? } */
 export const POST = withAuth(["ADMIN"], async (req, _ctx, admin) => {
-  const { userId, signIn, signOut, note } = await req.json();
+  const { userId, signIn, signOut, breaks, note } = await req.json();
   const inAt = new Date(signIn);
   const outAt = signOut ? new Date(signOut) : null;
   if (!userId || Number.isNaN(inAt.getTime())) return fail("Choose the employee and sign-in time");
   if (outAt && (Number.isNaN(outAt.getTime()) || outAt <= inAt)) return fail("Sign-out must be after sign-in");
   if (inAt.getTime() > Date.now() + 5 * 60_000) return fail("Sign-in can't be in the future");
   if (!(await User.exists({ _id: userId }))) return fail("Employee not found", 404);
+
+  let cleanList: ReturnType<typeof cleanBreaks> = null;
+  try {
+    cleanList = cleanBreaks(breaks, inAt, outAt);
+  } catch (e) {
+    throw new InputError((e as Error).message);
+  }
 
   const date = dayKey(inAt);
   if (await Attendance.exists({ user: userId, date })) return fail(`There's already an entry for ${date} — edit that one instead`, 409);
@@ -45,6 +53,7 @@ export const POST = withAuth(["ADMIN"], async (req, _ctx, admin) => {
     date,
     signIn: { at: inAt },
     ...(outAt ? { signOut: { at: outAt } } : {}),
+    breaks: cleanList || [],
     manual: true,
     editedBy: admin.id,
     editedAt: new Date(),

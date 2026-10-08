@@ -8,12 +8,42 @@ export const PAY_LABEL: Record<PayType, string> = {
   monthly: "Monthly salary",
 };
 
-export type ShiftLike = { date: string; signIn: { at: string | Date }; signOut?: { at: string | Date } | null };
+type At = { at: string | Date };
+export type BreakLike = { start: At; end?: At | null };
+export type ShiftLike = { date: string; signIn: At; signOut?: At | null; breaks?: BreakLike[] };
 
-/** Hours worked on a completed shift (0 while still signed in). */
+const ms = (x: At) => new Date(x.at).getTime();
+
+/** Total break time in hours; an open break counts up to `until` (default now). */
+export function breakHours(s: ShiftLike, until: Date = new Date()) {
+  return (s.breaks || []).reduce((sum, b) => sum + Math.max(0, (b.end ? ms(b.end) : until.getTime()) - ms(b.start)) / 3_600_000, 0);
+}
+
+/** Hours actually worked on a completed shift: sign-in → sign-out minus breaks (0 while still signed in). */
 export function shiftHours(s: ShiftLike) {
   if (!s.signOut?.at) return 0;
-  return Math.max(0, (new Date(s.signOut.at).getTime() - new Date(s.signIn.at).getTime()) / 3_600_000);
+  const gross = (ms(s.signOut) - ms(s.signIn)) / 3_600_000;
+  return Math.max(0, gross - breakHours(s, new Date(s.signOut.at)));
+}
+
+/** Hours worked so far on a shift still in progress (excludes breaks). */
+export function workedSoFar(s: ShiftLike, now: Date = new Date()) {
+  if (s.signOut?.at) return shiftHours(s);
+  return Math.max(0, (now.getTime() - ms(s.signIn)) / 3_600_000 - breakHours(s, now));
+}
+
+export type WorkStatus = "absent" | "online" | "break" | "out";
+
+/** online = at work, break = stepped out (offline), out = signed out for the day */
+export function workStatus(s?: ShiftLike | null): WorkStatus {
+  if (!s) return "absent";
+  if (s.signOut?.at) return "out";
+  if ((s.breaks || []).some((b) => !b.end)) return "break";
+  return "online";
+}
+
+export function openBreak(s?: ShiftLike | null) {
+  return (s?.breaks || []).find((b) => !b.end) || null;
 }
 
 export function fmtHours(h: number) {

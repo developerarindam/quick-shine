@@ -57,6 +57,10 @@ export default function DashboardHome() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] lg:px-8 lg:pb-10 lg:pt-8">
+      {/* Logo (the desktop sidebar already shows it) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo.svg" alt="Quick Shine" width={84} height={56} className="mb-3 h-14 w-auto lg:hidden" />
+
       {/* Greeting */}
       <div className="flex items-center justify-between">
         <div>
