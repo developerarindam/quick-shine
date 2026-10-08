@@ -47,6 +47,12 @@ const ExpenseSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // Salary / wage payments: who was paid (links the expense to payroll)
+    employee: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
   },
   { timestamps: true }
 );

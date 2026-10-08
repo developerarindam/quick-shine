@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ChevronRight, Globe, LogOut, Package, Receipt, Sparkles, UserCircle, Users, Wallet } from "lucide-react";
+import { BarChart3, CalendarCheck, ChevronRight, Globe, LogOut, Package, Receipt, Sparkles, UserCircle, Users, Wallet } from "lucide-react";
 import { useLowStock, usePendingHandovers, useSession } from "@/app/components/AppShell";
 import { Avatar, Badge, Card, Page, SectionTitle } from "@/app/components/ui";
 import { can, ROLE_LABEL } from "@/app/lib/roles";
@@ -44,8 +44,15 @@ export default function MorePage() {
         </Card>
       </Link>
 
-      <SectionTitle>Money</SectionTitle>
-      <Card className="overflow-hidden">
+      <SectionTitle>Work &amp; money</SectionTitle>
+      <Card className="divide-y divide-slate-100 overflow-hidden">
+        <MenuRow
+          href="/dashboard/attendance"
+          icon={CalendarCheck}
+          label="Attendance"
+          sub={can.manageStudio(user.role) ? "Sign in/out, team register & payroll" : "Sign in / out and your hours"}
+          color="bg-brand-100 text-brand-700"
+        />
         <MenuRow
           href="/dashboard/cash"
           icon={Wallet}

@@ -18,6 +18,7 @@ import {
 import { useLowStock, usePendingHandovers, useSession } from "@/app/components/AppShell";
 import { RankList, RevenueChart, type Report } from "@/app/components/charts";
 import { LowStockAlert } from "@/app/components/inventory";
+import { PunchCard, useMyAttendance } from "@/app/components/attendance";
 import { JobCard } from "@/app/components/jobs";
 import { Avatar, Card, Chips, EmptyState, ErrorState, ListSkeleton, SectionTitle, Skeleton, Stat, cn } from "@/app/components/ui";
 import { useApi } from "@/app/lib/api";
@@ -95,6 +96,9 @@ export default function DashboardHome() {
           </>
         )}
       </div>
+
+      {/* Attendance */}
+      <AttendanceCard />
 
       {/* Cash custody */}
       <CashCard />
@@ -360,5 +364,15 @@ function CashCard() {
         <ArrowRight className="size-5 text-slate-400" />
       </Card>
     </Link>
+  );
+}
+
+function AttendanceCard() {
+  const query = useMemo(() => rangeQuery(rangeFor("today")), []);
+  const att = useMyAttendance(query);
+  return (
+    <div className="mt-4">
+      <PunchCard data={att.data} onChange={att.reload} compact />
+    </div>
   );
 }

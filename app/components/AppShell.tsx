@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LogOut,
   Plus,
+  CalendarCheck,
   Package,
   Wallet,
   Receipt,
@@ -54,6 +55,7 @@ const SIDEBAR: NavItem[] = [
   { name: "Jobs", href: "/dashboard/service-entry", icon: ClipboardList },
   { name: "Bikes & Customers", href: "/dashboard/bikes", icon: Bike },
   { name: "Services", href: "/dashboard/services", icon: Sparkles, show: (u) => can.manageStudio(u.role) },
+  { name: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck },
   { name: "Cash & handover", href: "/dashboard/cash", icon: Wallet },
   { name: "Inventory", href: "/dashboard/inventory", icon: Package, show: (u) => can.manageStudio(u.role) },
   { name: "Expenses", href: "/dashboard/expenses", icon: Receipt, show: (u) => can.manageStudio(u.role) },
@@ -77,7 +79,7 @@ const hidesTabs = (pathname: string) => pathname === NEW_JOB || pathname.endsWit
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
   if (href === "/dashboard/more") {
-    return ["/dashboard/more", "/dashboard/cash", "/dashboard/services", "/dashboard/expenses", "/dashboard/inventory", "/dashboard/reports", "/dashboard/users", "/dashboard/profile"].some(
+    return ["/dashboard/more", "/dashboard/attendance", "/dashboard/cash", "/dashboard/services", "/dashboard/expenses", "/dashboard/inventory", "/dashboard/reports", "/dashboard/users", "/dashboard/profile"].some(
       (p) => pathname.startsWith(p)
     );
   }

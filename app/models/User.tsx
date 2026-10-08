@@ -18,6 +18,7 @@ export interface IUser extends Document {
   password: string;
   role: "ADMIN" | "MANAGER" | "USER";
   status: "Active" | "Inactive";
+  pay?: { type: "daily" | "hourly" | "monthly"; rate: number };
   createdAt: Date;
   updatedAt: Date;
 
@@ -66,6 +67,12 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: ["Active", "Inactive"],
       default: "Active",
+    },
+
+    // Payroll: how this person is paid (set by the Super Admin)
+    pay: {
+      type: { type: String, enum: ["daily", "hourly", "monthly"] },
+      rate: { type: Number, min: 0 },
     },
   },
   {

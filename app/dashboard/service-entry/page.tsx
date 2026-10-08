@@ -10,7 +10,7 @@ import { Card, Chips, EmptyState, ErrorState, Input, ListSkeleton, Page, SearchI
 import { useApi, useDayKey } from "@/app/lib/api";
 import { LIST_KEYS, rememberListUrl } from "@/app/lib/listState";
 import { can } from "@/app/lib/roles";
-import { ACTIVE_STATUSES, STATUS_META, balanceOf, type JobStatus } from "@/app/lib/jobs";
+import { ACTIVE_STATUSES, STATUS_META, balanceOf, paidOf, type JobStatus } from "@/app/lib/jobs";
 import {
   RANGE_LABEL,
   endOfDay,
@@ -126,6 +126,25 @@ function JobsList() {
 
   const totalBilled = filtered.reduce((s, j) => s + j.total, 0);
   const totalDue = filtered.reduce((s, j) => s + balanceOf(j), 0);
+  // money received on the jobs shown, split cash (offline) vs online
+  const received = useMemo(() => {
+    let cash = 0;
+    let online = 0;
+    for (const j of filtered) {
+      if (j.payments.length) {
+        for (const p of j.payments) {
+          if (p.mode === "online") online += p.amount;
+          else cash += p.amount;
+        }
+      } else {
+        // entries from before payment tracking: paid in full at billing
+        const paid = paidOf(j);
+        if (j.paymentType === "online") online += paid;
+        else cash += paid;
+      }
+    }
+    return { cash, online, total: cash + online };
+  }, [filtered]);
 
   const tabs: { value: Tab; label: string }[] = [
     { value: "active", label: "In studio" },
@@ -191,14 +210,29 @@ function JobsList() {
         <SearchInput value={search} onChange={setSearch} placeholder="Bike number, owner, phone, job #" />
 
         {/* Summary strip */}
-        {data && filtered.length > 0 && tab !== "active" && (
-          <div className="flex items-center justify-between rounded-2xl bg-brand-50 px-4 py-3 text-sm">
-            <span className="font-medium text-brand-800">{filtered.length} job(s)</span>
-            {showMoney && (
-              <span className="font-semibold tabular-nums text-brand-800">
-                {tab === "due" ? `${inr(totalDue)} to collect` : `${inr(totalBilled)} billed`}
+        {data && filtered.length > 0 && (
+          <div className="rounded-2xl bg-brand-50 p-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-white px-2 py-2">
+                <p className="text-[11px] font-medium text-slate-500">Cash (offline)</p>
+                <p className="font-bold tabular-nums text-slate-900">{inr(received.cash)}</p>
+              </div>
+              <div className="rounded-xl bg-white px-2 py-2">
+                <p className="text-[11px] font-medium text-slate-500">Online</p>
+                <p className="font-bold tabular-nums text-slate-900">{inr(received.online)}</p>
+              </div>
+              <div className="rounded-xl bg-brand-600 px-2 py-2 text-white">
+                <p className="text-[11px] font-medium text-white/70">Total</p>
+                <p className="font-bold tabular-nums">{inr(received.total)}</p>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center justify-between px-1 text-xs text-brand-800">
+              <span className="font-medium">{filtered.length} job(s)</span>
+              <span className="tabular-nums">
+                {showMoney && <>Billed {inr(totalBilled)}</>}
+                {totalDue > 0 && <span className="ml-2 font-semibold text-red-600">{inr(totalDue)} due</span>}
               </span>
-            )}
+            </div>
           </div>
         )}
 

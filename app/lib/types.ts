@@ -135,3 +135,19 @@ export type Handover = {
   createdAt: string;
   decidedAt?: string;
 };
+
+export type Punch = { at: string; lat?: number; lng?: number; accuracy?: number; distance?: number };
+
+export type Shift = {
+  _id: string;
+  user: string | { _id: string; name: string; role?: Role };
+  date: string;
+  signIn: Punch;
+  signOut?: Punch;
+  manual?: boolean;
+  editedBy?: NamedRef;
+  editedAt?: string;
+  note?: string;
+};
+
+export type PaySettings = { type: "daily" | "hourly" | "monthly"; rate: number };
