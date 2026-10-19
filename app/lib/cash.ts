@@ -49,8 +49,10 @@ export async function cashPositions(onlyUserId?: string): Promise<CashPosition[]
       { $group: { _id: "$from", total: { $sum: "$amount" } } },
     ]),
     Expense.aggregate([
-      { $match: { mode: "cash", createdBy: uid ? uid : { $exists: true, $ne: null } } },
-      { $group: { _id: "$createdBy", total: { $sum: "$amount" } } },
+      { $match: { mode: "cash" } },
+      { $addFields: { payer: { $ifNull: ["$paidBy", "$createdBy"] } } },
+      { $match: { payer: uid ? uid : { $ne: null } } },
+      { $group: { _id: "$payer", total: { $sum: "$amount" } } },
     ]),
     User.find(uid ? { _id: uid } : {}).select("name role status").lean(),
   ]);

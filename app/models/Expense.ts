@@ -47,6 +47,13 @@ const ExpenseSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    // Whose money paid it: cash → that person's cash in hand; online → the online account holder.
+    // Older expenses without it count against createdBy.
+    paidBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
     // Salary / wage payments: who was paid (links the expense to payroll)
     employee: {
       type: mongoose.Schema.Types.ObjectId,

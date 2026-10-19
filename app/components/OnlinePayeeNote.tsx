@@ -4,7 +4,7 @@ import { Smartphone } from "lucide-react";
 import { useApi } from "@/app/lib/api";
 
 /** Online / UPI payments always go to one account — say whose, instead of asking. */
-export function OnlinePayeeNote() {
+export function OnlinePayeeNote({ spending }: { spending?: boolean } = {}) {
   const { data } = useApi<{ onlinePayee: { _id: string; name: string } | null }>("/api/settings");
   const name = data?.onlinePayee?.name;
   return (
@@ -12,10 +12,11 @@ export function OnlinePayeeNote() {
       <Smartphone className="size-4 shrink-0" />
       {name ? (
         <span>
-          Online payment goes to <b>{name}</b>&apos;s account
+          {spending ? "Paid online from " : "Online payment goes to "}
+          <b>{name}</b>&apos;s account
         </span>
       ) : (
-        <span>Online payment goes to the studio account</span>
+        <span>{spending ? "Paid online from the studio account" : "Online payment goes to the studio account"}</span>
       )}
     </p>
   );

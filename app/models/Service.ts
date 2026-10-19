@@ -14,10 +14,23 @@ const ServiceSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Price when taken together with any other service in the same job (e.g. Foam Wash ₹99 in a combo)
+    comboPrice: {
+      type: Number,
+      min: 0,
+    },
+
     category: {
       type: String,
       enum: ["basic", "premium", "addon"],
       default: "basic",
+    },
+
+    // Short code used in sheets, e.g. FW, CCL (matched when importing old data)
+    code: {
+      type: String,
+      trim: true,
+      uppercase: true,
     },
 
     description: {

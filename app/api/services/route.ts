@@ -18,10 +18,12 @@ export const POST = withAuth(MANAGERS, async (req) => {
   const service = await Service.create({
     name: body.name,
     price: Number(body.price),
+    comboPrice: body.comboPrice === "" || body.comboPrice === undefined || body.comboPrice === null ? undefined : Number(body.comboPrice),
     category: body.category || "basic",
     description: body.description,
     duration: body.duration ? Number(body.duration) : undefined,
     sortOrder: Number(body.sortOrder) || 0,
+    code: body.code ? String(body.code).trim().toUpperCase() : undefined,
     isActive: body.isActive ?? true,
     consumes: Array.isArray(body.consumes)
       ? body.consumes

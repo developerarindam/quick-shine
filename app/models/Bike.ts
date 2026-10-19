@@ -21,6 +21,8 @@ const BikeSchema = new mongoose.Schema(
     notes: {
       type: String,
     },
+    // Set when the bike was first created by a sheet import
+    importBatch: { type: String },
   },
   { timestamps: true }
 );

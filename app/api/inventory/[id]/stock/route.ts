@@ -2,6 +2,7 @@ import InventoryItem from "@/app/models/InventoryItem";
 import Expense from "@/app/models/Expense";
 import { fail, ok, withAuth } from "@/app/lib/auth";
 import { applyStockChange } from "@/app/lib/inventory";
+import { expensePayer } from "@/app/lib/jobEntry";
 import { MANAGERS } from "@/app/lib/roles";
 import { round2 } from "@/app/lib/jobs";
 
@@ -57,6 +58,7 @@ export const POST = withAuth<Ctx>(MANAGERS, async (req, { params }, user) => {
       date: new Date(),
       note: note?.trim() || "Inventory restock",
       createdBy: user.id,
+      paidBy: await expensePayer(mode === "online" ? "online" : "cash", user.id, user),
     });
   }
 

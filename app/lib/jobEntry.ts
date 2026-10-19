@@ -52,3 +52,17 @@ export async function receiverFor(mode: string, requested: unknown, user: Sessio
   }
   return collectorId(requested, user);
 }
+
+/**
+ * Whose money an expense came from.
+ * online → always the online account holder (Chandan Manna).
+ * cash   → only the Super Admin may pick whose cash; everyone else spends their own.
+ */
+export async function expensePayer(mode: string, requested: unknown, user: SessionUser): Promise<string> {
+  if (mode === "online") {
+    const payee = await onlinePayee();
+    return payee ? payee._id : user.id;
+  }
+  if (!can.editHistory(user.role)) return user.id;
+  return collectorId(requested, user);
+}

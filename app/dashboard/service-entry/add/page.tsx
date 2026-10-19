@@ -35,7 +35,18 @@ const CATEGORY_LABEL: Record<Service["category"], string> = {
 
 const compact = (s?: string) => (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-type Line = { serviceId: string; name: string; price: string };
+// basePrice / comboPrice come from the services list; `edited` = price typed by hand (never auto-changed)
+type Line = { serviceId: string; name: string; price: string; basePrice: number; comboPrice?: number; edited?: boolean };
+
+const hasCombo = (s: { price: number; comboPrice?: number | null }) => s.comboPrice !== undefined && s.comboPrice !== null && s.comboPrice !== s.price;
+
+/** With 2+ services, lines that have a combo price use it (e.g. Foam Wash ₹119 → ₹99); alone they use the normal price. */
+function applyCombo(lines: Line[]): Line[] {
+  const combo = lines.length > 1;
+  return lines.map((l) =>
+    l.edited ? l : { ...l, price: String(combo && l.comboPrice !== undefined && l.comboPrice !== null ? l.comboPrice : l.basePrice) }
+  );
+}
 
 export default function NewJobPage() {
   return (
@@ -130,9 +141,11 @@ function NewJobForm() {
 
   const toggleService = (s: Service) => {
     setLines((prev) =>
-      prev.some((l) => l.serviceId === s._id)
-        ? prev.filter((l) => l.serviceId !== s._id)
-        : [...prev, { serviceId: s._id, name: s.name, price: String(s.price) }]
+      applyCombo(
+        prev.some((l) => l.serviceId === s._id)
+          ? prev.filter((l) => l.serviceId !== s._id)
+          : [...prev, { serviceId: s._id, name: s.name, price: String(s.price), basePrice: s.price, comboPrice: s.comboPrice ?? undefined }]
+      )
     );
   };
 
@@ -352,6 +365,7 @@ function NewJobForm() {
                       </span>
                       <span className={cn("mt-1 text-sm font-bold tabular-nums", on ? "text-brand-600" : "text-slate-500")}>
                         {inr(s.price)}
+                        {hasCombo(s) && <span className="ml-1 text-[11px] font-semibold text-emerald-600">· {inr(s.comboPrice!)} combo</span>}
                       </span>
                       <span
                         className={cn(
@@ -377,7 +391,12 @@ function NewJobForm() {
           <Card className="divide-y divide-slate-100">
             {lines.map((l, i) => (
               <div key={l.serviceId} className="flex items-center gap-3 px-4 py-2.5">
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">{l.name}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-700">
+                  {l.name}
+                  {!l.edited && lines.length > 1 && hasCombo({ price: l.basePrice, comboPrice: l.comboPrice }) && (
+                    <span className="ml-1.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">combo price</span>
+                  )}
+                </span>
                 <div className="relative w-28">
                   <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
                   <input
@@ -386,14 +405,14 @@ function NewJobForm() {
                     min={0}
                     value={l.price}
                     aria-label={`Price for ${l.name}`}
-                    onChange={(e) => setLines((prev) => prev.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))}
+                    onChange={(e) => setLines((prev) => prev.map((x, j) => (j === i ? { ...x, price: e.target.value, edited: true } : x)))}
                     className="h-10 w-full rounded-lg border border-slate-200 pl-6 pr-2 text-right text-base font-semibold tabular-nums outline-none focus:border-brand-500"
                   />
                 </div>
                 <button
                   type="button"
                   aria-label={`Remove ${l.name}`}
-                  onClick={() => setLines((prev) => prev.filter((_, j) => j !== i))}
+                  onClick={() => setLines((prev) => applyCombo(prev.filter((_, j) => j !== i)))}
                   className="flex size-8 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-500"
                 >
                   <X className="size-4" />

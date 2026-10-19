@@ -87,6 +87,8 @@ const ServiceEntrySchema = new mongoose.Schema(
     },
     completedAt: Date,
     deliveredAt: Date,
+    // Set on jobs created by a sheet import (lets the Super Admin undo that import)
+    importBatch: { type: String, index: true },
   },
   { timestamps: true }
 );

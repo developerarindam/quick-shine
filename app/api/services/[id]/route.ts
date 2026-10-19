@@ -9,7 +9,7 @@ function cleanConsumes(list: { item?: string; qty?: number | string }[]) {
   return list.filter((c) => c.item && Number(c.qty) > 0).map((c) => ({ item: c.item, qty: Number(c.qty) }));
 }
 
-const FIELDS = ["name", "price", "category", "description", "duration", "sortOrder", "isActive"] as const;
+const FIELDS = ["name", "code", "price", "comboPrice", "category", "description", "duration", "sortOrder", "isActive"] as const;
 
 export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
   const { id } = await params;
@@ -20,7 +20,7 @@ export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
 
   for (const key of FIELDS) {
     if (body[key] === undefined) continue;
-    service[key] = ["price", "duration", "sortOrder"].includes(key)
+    service[key] = ["price", "comboPrice", "duration", "sortOrder"].includes(key)
       ? body[key] === "" ? undefined : Number(body[key])
       : body[key];
   }

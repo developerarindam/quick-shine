@@ -36,7 +36,7 @@ const CATEGORIES: { value: Category; label: string }[] = [
 ];
 
 type Use = { item: string; qty: string };
-const EMPTY = { name: "", price: "", category: "basic" as Category, duration: "", description: "", sortOrder: "", consumes: [] as Use[] };
+const EMPTY = { name: "", code: "", price: "", comboPrice: "", category: "basic" as Category, duration: "", description: "", sortOrder: "", consumes: [] as Use[] };
 
 export default function ServicesClient() {
   const toast = useToast();
@@ -66,7 +66,9 @@ export default function ServicesClient() {
       s
         ? {
             name: s.name,
+            code: s.code || "",
             price: String(s.price),
+            comboPrice: s.comboPrice !== undefined && s.comboPrice !== null ? String(s.comboPrice) : "",
             category: s.category,
             duration: s.duration ? String(s.duration) : "",
             description: s.description || "",
@@ -166,10 +168,14 @@ export default function ServicesClient() {
                   <button type="button" onClick={() => openForm(s)} className="min-w-0 flex-1 text-left">
                     <p className="flex items-center gap-2 font-medium text-slate-800">
                       <span className="truncate">{s.name}</span>
+                      {s.code && <Badge tone="brand">{s.code}</Badge>}
                       {!s.isActive && <Badge>Hidden</Badge>}
                     </p>
                     <p className="mt-0.5 flex items-center gap-2 text-sm text-slate-500">
                       <span className="font-semibold tabular-nums text-slate-700">{inr(s.price)}</span>
+                      {s.comboPrice !== undefined && s.comboPrice !== null && s.comboPrice !== s.price && (
+                        <span className="tabular-nums text-emerald-700">· {inr(s.comboPrice)} in combo</span>
+                      )}
                       {s.duration ? (
                         <span className="flex items-center gap-1">
                           <Clock className="size-3" /> {s.duration} min
@@ -208,14 +214,26 @@ export default function ServicesClient() {
           <Field label="Name">
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Foam Wash" autoFocus={!editing} />
           </Field>
+          <Field label="Short code" hint="Used in your Excel sheets, e.g. FW, CCL — the importer matches on it">
+            <Input
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase().replace(/\s/g, "") })}
+              placeholder="e.g. FW"
+              maxLength={8}
+              autoCapitalize="characters"
+            />
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Price">
               <MoneyInput value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0" />
             </Field>
-            <Field label="Duration (min)">
-              <Input type="number" inputMode="numeric" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="30" />
+            <Field label="Price in a combo" hint="When taken with any other service">
+              <MoneyInput value={form.comboPrice} onChange={(e) => setForm({ ...form, comboPrice: e.target.value })} placeholder="Same" />
             </Field>
           </div>
+          <Field label="Duration (min)">
+            <Input type="number" inputMode="numeric" value={form.duration} onChange={(e) => setForm({ ...form, duration: e.target.value })} placeholder="30" />
+          </Field>
           <Field label="Category">
             <Segmented value={form.category} onChange={(category) => setForm({ ...form, category })} options={CATEGORIES} />
           </Field>

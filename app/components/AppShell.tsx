@@ -58,7 +58,7 @@ const SIDEBAR: NavItem[] = [
   { name: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck },
   { name: "Cash & handover", href: "/dashboard/cash", icon: Wallet },
   { name: "Inventory", href: "/dashboard/inventory", icon: Package, show: (u) => can.manageStudio(u.role) },
-  { name: "Expenses", href: "/dashboard/expenses", icon: Receipt, show: (u) => can.manageStudio(u.role) },
+  { name: "Expenses", href: "/dashboard/expenses", icon: Receipt },
   { name: "Reports", href: "/dashboard/reports", icon: BarChart3, show: (u) => can.manageStudio(u.role) },
   { name: "Team", href: "/dashboard/users", icon: Users, show: (u) => can.manageUsers(u.role) },
   { name: "My profile", href: "/dashboard/profile", icon: UserCircle },

@@ -23,7 +23,9 @@ export type Service = {
   _id: string;
   name: string;
   price: number;
+  comboPrice?: number;
   category: "basic" | "premium" | "addon";
+  code?: string;
   description?: string;
   duration?: number;
   sortOrder?: number;
@@ -103,6 +105,7 @@ export type Expense = {
   date: string;
   note?: string;
   createdBy?: NamedRef;
+  paidBy?: NamedRef;
 };
 
 export function serviceName(s: Job["services"][number]) {

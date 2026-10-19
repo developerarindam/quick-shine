@@ -5,7 +5,7 @@ import User from "@/app/models/User";
 import { clearSessionCache, fail, ok, parseRange, withAuth } from "@/app/lib/auth";
 import { dayKey } from "@/app/lib/attendance";
 import { earningsFor, type PayType } from "@/app/lib/attendanceShared";
-import { entryDate } from "@/app/lib/jobEntry";
+import { entryDate, expensePayer } from "@/app/lib/jobEntry";
 import { round2 } from "@/app/lib/jobs";
 
 const PAY_TYPES: PayType[] = ["daily", "hourly", "monthly"];
@@ -75,6 +75,8 @@ export const POST = withAuth(["ADMIN"], async (req, _ctx, admin) => {
     note: note?.trim() || undefined,
     employee: userId,
     createdBy: admin.id,
+    // cash salary comes out of the Super Admin's cash; online from Chandan Manna's account
+    paidBy: await expensePayer(mode === "online" ? "online" : "cash", admin.id, admin),
   });
   return ok(expense);
 });
