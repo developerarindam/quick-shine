@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { AlertTriangle, Boxes, IndianRupee, Package, Plus } from "lucide-react";
-import { ItemFormSheet, LevelBadge, LowStockAlert, StockBar, StockSheet, categoryMeta, INVENTORY_CATEGORIES } from "@/app/components/inventory";
+import { ItemFormSheet, LevelBadge, LowStockAlert, StockBar, StockSheet, categoryMeta, useInventoryCategories } from "@/app/components/inventory";
 import { Button, Card, Chips, EmptyState, ErrorState, Fab, ListSkeleton, Page, SearchInput, Stat, cn } from "@/app/components/ui";
 import { useApi } from "@/app/lib/api";
 import { inr } from "@/app/lib/format";
@@ -43,7 +43,8 @@ function Inventory() {
     });
   }, [data, filter, search]);
 
-  const categories = INVENTORY_CATEGORIES.filter((c) => active.some((i) => i.category === c.value));
+  const allCategories = useInventoryCategories().all;
+  const categories = allCategories.filter((c) => active.some((i) => i.category === c.value));
   const replace = (updated: InventoryItem) => setData((list) => list?.map((i) => (i._id === updated._id ? updated : i)));
 
   return (
@@ -116,7 +117,7 @@ function Inventory() {
           ) : (
             <div className="mt-4 grid gap-3 lg:grid-cols-2">
               {visible.map((item) => {
-                const meta = categoryMeta(item.category);
+                const meta = categoryMeta(item.category, allCategories);
                 const level = stockLevel(item);
                 return (
                   <Card key={item._id} className={cn("flex items-center gap-3 p-4", level === "out" && "border-red-200", !item.isActive && "opacity-60")}>

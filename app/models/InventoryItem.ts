@@ -11,9 +11,10 @@ const InventoryItemSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    // a built-in category or one the studio added (validated by the API)
     category: {
       type: String,
-      enum: INVENTORY_CATEGORIES,
+      trim: true,
       default: "other",
     },
     unit: {

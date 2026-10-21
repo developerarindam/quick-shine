@@ -1,10 +1,11 @@
-import InventoryItem, { INVENTORY_CATEGORIES, INVENTORY_UNITS } from "@/app/models/InventoryItem";
+import InventoryItem, { INVENTORY_UNITS } from "@/app/models/InventoryItem";
 import StockMovement from "@/app/models/StockMovement";
 import Service from "@/app/models/Service";
 import "@/app/models/ServiceEntry";
 import "@/app/models/User";
 import { fail, ok, withAuth } from "@/app/lib/auth";
 import { MANAGERS } from "@/app/lib/roles";
+import { isInventoryCategory } from "@/app/lib/inventory";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -48,7 +49,7 @@ export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
     item.name = body.name;
   }
   if (body.category !== undefined) {
-    if (!INVENTORY_CATEGORIES.includes(body.category)) return fail("Invalid category");
+    if (!(await isInventoryCategory(body.category))) return fail("Invalid category");
     item.category = body.category;
   }
   if (body.unit !== undefined) {

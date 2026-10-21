@@ -3,7 +3,23 @@
 import InventoryItem from "@/app/models/InventoryItem";
 import StockMovement from "@/app/models/StockMovement";
 import Service from "@/app/models/Service";
+import { INVENTORY_CATEGORIES } from "@/app/models/InventoryItem";
+import { getSetting } from "@/app/models/Setting";
 import { LOW_STOCK_FILTER, stockLevel } from "@/app/lib/stock";
+
+export type CustomCategory = { value: string; label: string };
+export const CATEGORY_SETTING = "inventoryCategories";
+
+/** Categories the studio added on top of the built-in ones. */
+export async function customCategories() {
+  return (await getSetting<CustomCategory[]>(CATEGORY_SETTING)) || [];
+}
+
+export async function isInventoryCategory(value: unknown) {
+  const v = String(value);
+  if ((INVENTORY_CATEGORIES as readonly string[]).includes(v)) return true;
+  return (await customCategories()).some((c) => c.value === v);
+}
 
 type ChangeOpts = {
   type: "in" | "out" | "adjust" | "job" | "job_reversal";

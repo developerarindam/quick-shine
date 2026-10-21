@@ -6,7 +6,7 @@ import { nextSequence } from "@/app/models/Counter";
 import { consumeForJob } from "@/app/lib/inventory";
 import { collectorId, entryDate, receiverFor } from "@/app/lib/jobEntry";
 import { bikeNumberRegex, fail, normalizeBikeNumber, ok, parseRange, withAuth } from "@/app/lib/auth";
-import { ACTIVE_STATUSES, JOB_STATUSES, calcTotals, type JobStatus } from "@/app/lib/jobs";
+import { ACTIVE_STATUSES, JOB_STATUSES, calcTotals, round2, type JobStatus } from "@/app/lib/jobs";
 
 /**
  * ?view=active → all unfinished jobs (any date)
@@ -43,8 +43,11 @@ type NewJobBody = {
   services: { serviceId: string; price: number }[];
   discount?: number;
   discountType?: "flat" | "percent";
-  paymentType: "cash" | "online" | "due";
+  /** "split" = part cash, part online (cashAmount + onlineAmount); any shortfall stays due */
+  paymentType: "cash" | "online" | "due" | "split";
   advance?: number;
+  cashAmount?: number;
+  onlineAmount?: number;
   advanceMode?: "cash" | "online";
   status?: JobStatus;
   assignedTo?: string;
@@ -100,19 +103,30 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
   const discount = Math.max(0, Number(body.discount) || 0);
   const { subtotal, total } = calcTotals(items.map((i) => i.price), discount, discountType);
 
-  if (!["cash", "online", "due"].includes(body.paymentType)) return fail("Choose a payment type");
+  if (!["cash", "online", "due", "split"].includes(body.paymentType)) return fail("Choose a payment type");
 
   const payments: { amount: number; mode: string; at: Date; by: string }[] = [];
   let paidAmount = 0;
-  let paymentType = body.paymentType;
+  let paymentType: "cash" | "online" | "due";
 
-  if (body.paymentType !== "due") {
+  if (body.paymentType === "split") {
+    const cash = round2(Math.max(0, Number(body.cashAmount) || 0));
+    const online = round2(Math.max(0, Number(body.onlineAmount) || 0));
+    if (round2(cash + online) > total) return fail("Cash + online is more than the bill");
+    if (cash > 0) payments.push({ amount: cash, mode: "cash", at: when, by: collector });
+    if (online > 0) payments.push({ amount: online, mode: "online", at: when, by: await receiverFor("online", null, user) });
+    paidAmount = round2(cash + online);
+    // fully paid → record the larger share as the settling mode
+    paymentType = paidAmount >= total ? (online > cash ? "online" : "cash") : "due";
+  } else if (body.paymentType !== "due") {
+    paymentType = body.paymentType;
     if (total > 0) {
       const by = await receiverFor(body.paymentType, body.collectedBy, user);
       payments.push({ amount: total, mode: body.paymentType, at: when, by });
     }
     paidAmount = total;
   } else {
+    paymentType = "due";
     const advance = Math.min(Math.max(0, Number(body.advance) || 0), total);
     if (advance > 0) {
       const mode = body.advanceMode === "online" ? "online" : "cash";

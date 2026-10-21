@@ -18,6 +18,12 @@ export const GET = withAuth(["ADMIN"], async (req) => {
     Expense.find({ employee: { $ne: null }, date: { $gte: from, $lte: to } }).sort({ date: -1 }).lean(),
   ]);
 
+  // who handed over each payment (may be someone outside the list above)
+  const payerIds = [...new Set(payments.map((p) => String(p.paidBy ?? p.createdBy)).filter((x) => x && x !== "undefined"))];
+  const payerNames = new Map(
+    (await User.find({ _id: { $in: payerIds } }).select("name").lean()).map((u) => [String(u._id), u.name as string])
+  );
+
   const rows = users.map((u) => {
     const id = String(u._id);
     const mine = shifts.filter((s) => String(s.user) === id);
@@ -31,7 +37,14 @@ export const GET = withAuth(["ADMIN"], async (req) => {
       hours: round2(e.hours),
       paid,
       balance: round2(e.earned - paid),
-      payments: paidList.map((p) => ({ _id: p._id, amount: p.amount, mode: p.mode, date: p.date, note: p.note })),
+      payments: paidList.map((p) => ({
+        _id: p._id,
+        amount: p.amount,
+        mode: p.mode,
+        date: p.date,
+        note: p.note,
+        paidBy: payerNames.get(String(p.paidBy ?? p.createdBy)) || "",
+      })),
     };
   });
 
@@ -58,9 +71,12 @@ export const PUT = withAuth(["ADMIN"], async (req) => {
   return ok({ pay: user.pay });
 });
 
-/** Pay salary / wages: { userId, amount, mode, note?, date? } — recorded as a Salary expense */
+/**
+ * Pay salary / wages: { userId, amount, mode, paidBy?, note?, date? } — recorded as a Salary expense.
+ * Part payments are fine: each one is its own expense and the balance carries the rest.
+ */
 export const POST = withAuth(["ADMIN"], async (req, _ctx, admin) => {
-  const { userId, amount, mode, note, date } = await req.json();
+  const { userId, amount, mode, paidBy, note, date } = await req.json();
   const value = round2(Number(amount) || 0);
   if (value <= 0) return fail("Enter the amount paid");
   const emp = await User.findById(userId).select("name").lean();
@@ -75,8 +91,8 @@ export const POST = withAuth(["ADMIN"], async (req, _ctx, admin) => {
     note: note?.trim() || undefined,
     employee: userId,
     createdBy: admin.id,
-    // cash salary comes out of the Super Admin's cash; online from Chandan Manna's account
-    paidBy: await expensePayer(mode === "online" ? "online" : "cash", admin.id, admin),
+    // cash salary comes out of the chosen person's cash (default: the Super Admin); online from Chandan Manna's account
+    paidBy: await expensePayer(mode === "online" ? "online" : "cash", paidBy || admin.id, admin),
   });
   return ok(expense);
 });

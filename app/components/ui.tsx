@@ -98,13 +98,13 @@ export function Page({
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
-  wide?: boolean;
+  wide?: boolean | "full";
 }) {
   const router = useRouter();
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-lg print:hidden lg:border-none lg:bg-transparent lg:backdrop-blur-none">
-        <div className={cn("mx-auto flex h-14 items-center gap-1 px-2 lg:h-20 lg:px-8", wide ? "max-w-6xl" : "max-w-4xl")}>
+        <div className={cn("mx-auto flex h-14 items-center gap-1 px-2 lg:h-20 lg:px-8", wide === "full" ? "max-w-[1800px]" : wide ? "max-w-6xl" : "max-w-4xl")}>
           {back &&
             (typeof back === "string" ? (
               <Link href={back} aria-label="Back" className="inline-flex size-10 items-center justify-center rounded-full text-slate-700 hover:bg-slate-100">
@@ -125,7 +125,7 @@ export function Page({
       <div
         className={cn(
           "mx-auto px-4 pt-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:px-8 lg:pb-10",
-          wide ? "max-w-6xl" : "max-w-4xl",
+          wide === "full" ? "max-w-[1800px]" : wide ? "max-w-6xl" : "max-w-4xl",
           className
         )}
       >

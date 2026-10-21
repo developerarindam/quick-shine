@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Coffee, Crosshair, ExternalLink, IndianRupee, MapPin, Pencil, Plus, Trash2, UserCheck, Wallet } from "lucide-react";
+import { Coffee, Crosshair, ExternalLink, IndianRupee, MapPin, Pencil, Plus, Printer, Trash2, UserCheck, Wallet } from "lucide-react";
 import { useSession } from "@/app/components/AppShell";
+import { OnlinePayeeNote } from "@/app/components/OnlinePayeeNote";
 import { ShiftRow, StatusPill } from "@/app/components/attendance";
 import { Sheet, useConfirm, useToast } from "@/app/components/overlays";
 import { PeriodPicker, usePeriod } from "@/app/components/PeriodPicker";
@@ -26,8 +27,9 @@ type PayrollRow = {
   earned: number;
   paid: number;
   balance: number;
-  payments: { _id: string; amount: number; mode: string; date: string; note?: string }[];
+  payments: SalaryPayment[];
 };
+type SalaryPayment = { _id: string; amount: number; mode: string; date: string; note?: string; paidBy?: string };
 type Tab = "today" | "register" | "payroll" | "location";
 
 const nameOf = (s: Shift) => (typeof s.user === "object" ? s.user.name : "");
@@ -404,8 +406,10 @@ function Payroll() {
                     </button>
                   </div>
                   <div className="text-right">
-                    <p className={cn("text-lg font-bold tabular-nums", r.balance > 0 ? "text-red-600" : "text-slate-900")}>{inr(r.balance)}</p>
-                    <p className="text-[11px] text-slate-500">balance</p>
+                    <p className={cn("text-lg font-bold tabular-nums", r.balance > 0 ? "text-red-600" : r.balance < 0 ? "text-sky-700" : "text-slate-900")}>
+                      {inr(Math.abs(r.balance))}
+                    </p>
+                    <p className="text-[11px] text-slate-500">{r.balance < 0 ? "paid ahead" : "to pay"}</p>
                   </div>
                 </div>
                 <dl className="mt-3 grid grid-cols-4 divide-x divide-slate-100 rounded-xl bg-slate-50 py-2 text-center text-xs">
@@ -428,9 +432,37 @@ function Payroll() {
                 </dl>
                 {r.open > 0 && <p className="mt-2 text-xs text-amber-700">{r.open} day(s) have no sign-out — correct them in Register so hours count.</p>}
                 {r.payments.length > 0 && (
-                  <p className="mt-2 truncate text-xs text-slate-500">
-                    Paid: {r.payments.map((p) => `${inr(p.amount)} ${p.mode} (${fmtDate(p.date)})`).join(", ")}
-                  </p>
+                  <div className="mt-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Payments received · {r.payments.length}</p>
+                    <ul className="mt-1 divide-y divide-slate-100">
+                      {r.payments.map((p) => (
+                        <li key={p._id} className="flex items-center gap-2 py-2 text-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold tabular-nums text-slate-900">
+                              {inr(p.amount)}{" "}
+                              <span className={cn("ml-1 rounded-md px-1.5 py-0.5 text-[11px] font-semibold", p.mode === "online" ? "bg-sky-100 text-sky-700" : "bg-emerald-100 text-emerald-700")}>
+                                {p.mode === "online" ? "Online" : "Cash"}
+                              </span>
+                            </p>
+                            <p className="truncate text-xs text-slate-500">
+                              {fmtDate(p.date)}
+                              {p.paidBy ? ` · paid by ${p.paidBy}` : ""}
+                              {p.note ? ` · ${p.note}` : ""}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => printSlip(r, p)}
+                            className="flex size-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                            aria-label="Print pay slip"
+                            title="Print pay slip"
+                          >
+                            <Printer className="size-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
                 <Button
                   variant="success"
@@ -445,8 +477,8 @@ function Payroll() {
             ))}
           </div>
           <p className="mt-3 px-1 text-xs text-slate-500">
-            Monthly salary is paid for days present (salary ÷ days in the month). Payments are saved as Salary expenses — cash payments also come out of
-            your cash in hand.
+            Monthly salary is paid for days present (salary ÷ days in the month). Each payment is saved as a Salary expense, so it is taken off the
+            profit. Cash comes out of the chosen person&apos;s cash in hand; online comes out of the studio account.
           </p>
         </>
       )}
@@ -520,10 +552,35 @@ function RateSheet({ row, onClose, onSaved }: { row: PayrollRow | null; onClose:
   );
 }
 
+/** Opens a one-page salary slip for a payment and sends it to the printer. */
+function printSlip(row: PayrollRow, p: SalaryPayment) {
+  const w = window.open("", "_blank", "width=420,height=640");
+  if (!w) return;
+  const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  const line = (k: string, v: string, strong = false) =>
+    `<tr><td>${esc(k)}</td><td style="text-align:right;${strong ? "font-weight:700" : ""}">${esc(v)}</td></tr>`;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Pay slip — ${esc(row.user.name)}</title>
+<style>body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}h1{font-size:18px;margin:0}p{margin:2px 0;color:#475569;font-size:13px}
+table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}td{padding:8px 0;border-bottom:1px solid #e2e8f0}
+.amt{font-size:28px;font-weight:800;margin-top:16px}.sign{margin-top:48px;display:flex;justify-content:space-between;font-size:12px;color:#64748b}
+.sign span{border-top:1px solid #94a3b8;padding-top:4px;width:40%;text-align:center}</style></head><body>
+<img src="${location.origin}/logo.svg" alt="" style="height:40px"><h1>Salary payment slip</h1><p>Quick Shine Studio</p>
+<div class="amt">${esc(inr(p.amount))}</div><p>received by ${esc(row.user.name)}</p>
+<table>${line("Date", fmtDate(p.date))}${line("Paid with", p.mode === "online" ? "Online / UPI" : "Cash")}${p.paidBy ? line("Paid by", p.paidBy) : ""}${
+    p.note ? line("Note", p.note) : ""
+  }${line("Earned this period", inr(row.earned))}${line("Paid this period (all payments)", inr(row.paid))}${row.balance < 0 ? line("Paid in advance", inr(-row.balance), true) : line("Balance still to pay", inr(row.balance), true)}</table>
+<div class="sign"><span>Employee signature</span><span>Paid by</span></div>
+<script>window.onload=()=>{window.print()}</script></body></html>`);
+  w.document.close();
+}
+
 function PaySheet({ row, onClose, onSaved }: { row: PayrollRow | null; onClose: () => void; onSaved: () => void }) {
   const toast = useToast();
+  const me = useSession();
+  const team = useApi<Member[]>("/api/users?lite=1");
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<"cash" | "online">("cash");
+  const [payer, setPayer] = useState(me.id);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastId, setLastId] = useState<string | null>(null);
@@ -538,8 +595,9 @@ function PaySheet({ row, onClose, onSaved }: { row: PayrollRow | null; onClose: 
   const save = async () => {
     setSaving(true);
     try {
-      await api("/api/payroll", { method: "POST", body: { userId: row!.user._id, amount: Number(amount), mode, note } });
-      toast(`${inr(Number(amount))} paid to ${row!.user.name}`);
+      await api("/api/payroll", { method: "POST", body: { userId: row!.user._id, amount: Number(amount), mode, paidBy: mode === "cash" ? payer : undefined, note } });
+      const left = Math.max(0, Math.round((row!.balance - Number(amount)) * 100) / 100);
+      toast(`${inr(Number(amount))} paid to ${row!.user.name}${left > 0 ? ` · ${inr(left)} still to pay` : ""}`);
       onSaved();
       onClose();
     } catch (e) {
@@ -569,7 +627,10 @@ function PaySheet({ row, onClose, onSaved }: { row: PayrollRow | null; onClose: 
         <Field label="Amount">
           <MoneyInput value={amount} onChange={(e) => setAmount(e.target.value)} className="h-14 text-2xl font-bold" />
         </Field>
-        <Field label="Paid by">
+        {row && Number(amount) > 0 && Number(amount) < row.balance && (
+          <p className="-mt-2 text-xs font-medium text-amber-700">Part payment — {inr(Math.round((row.balance - Number(amount)) * 100) / 100)} will stay as balance</p>
+        )}
+        <Field label="Paid with">
           <Segmented
             value={mode}
             onChange={setMode}
@@ -579,6 +640,20 @@ function PaySheet({ row, onClose, onSaved }: { row: PayrollRow | null; onClose: 
             ]}
           />
         </Field>
+        {mode === "online" ? (
+          <OnlinePayeeNote spending />
+        ) : (
+          <Field label="Whose cash" hint="The amount comes out of this person's cash in hand">
+            <Select value={payer} onChange={(e) => setPayer(e.target.value)}>
+              {(team.data || [{ _id: me.id, name: me.name, role: me.role }]).map((m) => (
+                <option key={m._id} value={m._id}>
+                  {m.name}
+                  {m._id === me.id ? " (me)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field label="Note">
           <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Week 1 wages, advance" />
         </Field>

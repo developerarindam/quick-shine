@@ -1,6 +1,6 @@
-import InventoryItem, { INVENTORY_CATEGORIES, INVENTORY_UNITS } from "@/app/models/InventoryItem";
+import InventoryItem, { INVENTORY_UNITS } from "@/app/models/InventoryItem";
 import { fail, ok, withAuth } from "@/app/lib/auth";
-import { applyStockChange, lowStockItems } from "@/app/lib/inventory";
+import { applyStockChange, isInventoryCategory, lowStockItems } from "@/app/lib/inventory";
 import { MANAGERS } from "@/app/lib/roles";
 
 /**
@@ -26,7 +26,7 @@ export const POST = withAuth(MANAGERS, async (req, _ctx, user) => {
   const { name, category, unit, stock, minStock, costPerUnit, supplier, notes } = await req.json();
 
   if (!name || !String(name).trim()) return fail("Item name is required");
-  if (category && !INVENTORY_CATEGORIES.includes(category)) return fail("Invalid category");
+  if (category && !(await isInventoryCategory(category))) return fail("Invalid category");
   if (unit && !INVENTORY_UNITS.includes(unit)) return fail("Invalid unit");
 
   const item = await InventoryItem.create({

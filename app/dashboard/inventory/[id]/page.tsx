@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ClipboardCheck, Minus, Pencil, Plus, RotateCcw, Sparkles, Trash2, Wrench } from "lucide-react";
-import { ItemFormSheet, LevelBadge, StockBar, StockSheet, categoryMeta, type StockAction } from "@/app/components/inventory";
+import { ItemFormSheet, LevelBadge, StockBar, StockSheet, categoryMeta, useInventoryCategories, type StockAction } from "@/app/components/inventory";
 import { useConfirm, useToast } from "@/app/components/overlays";
 import { Button, Card, EmptyState, ErrorState, IconButton, ListSkeleton, Page, SectionTitle, cn } from "@/app/components/ui";
 import { api, useApi } from "@/app/lib/api";
@@ -28,6 +28,7 @@ export default function InventoryItemPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { data, loading, error, reload } = useApi<Detail>(`/api/inventory/${id}`);
+  const categoryList = useInventoryCategories().all;
 
   const [editOpen, setEditOpen] = useState(false);
   const [stockAction, setStockAction] = useState<StockAction | null>(null);
@@ -49,7 +50,7 @@ export default function InventoryItemPage() {
   if (!data) return null;
 
   const { item, movements, usedBy } = data;
-  const meta = categoryMeta(item.category);
+  const meta = categoryMeta(item.category, categoryList);
 
   const remove = async () => {
     const ok = await confirm({ title: `Delete ${item.name}?`, message: "Items with stock history are archived instead.", confirmText: "Delete", danger: true });

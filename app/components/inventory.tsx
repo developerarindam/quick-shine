@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertTriangle, Brush, Droplets, Minus, Package, Plus, Shield, SprayCan, Wrench, type LucideIcon } from "lucide-react";
-import { api } from "@/app/lib/api";
+import { AlertTriangle, Brush, Droplets, Minus, Package, Plus, Shield, SprayCan, Tag, Wrench, X, type LucideIcon } from "lucide-react";
+import { api, primeApiCache, useApi } from "@/app/lib/api";
 import { inr } from "@/app/lib/format";
 import { fmtQty, stockLevel } from "@/app/lib/stock";
 import type { InventoryItem, LowStockItem } from "@/app/lib/types";
@@ -21,7 +21,26 @@ export const INVENTORY_CATEGORIES: { value: string; label: string; icon: LucideI
 ];
 export const UNITS = ["ml", "L", "g", "kg", "pcs", "bottle", "can", "pack"];
 
-export const categoryMeta = (c: string) => INVENTORY_CATEGORIES.find((x) => x.value === c) || INVENTORY_CATEGORIES[6];
+type CategoryMeta = (typeof INVENTORY_CATEGORIES)[number] & { custom?: boolean };
+const CATEGORIES_URL = "/api/inventory/categories";
+
+/** Built-in categories plus the ones the studio added ("Other" stays last). */
+export function useInventoryCategories() {
+  const { data, setData } = useApi<{ value: string; label: string }[]>(CATEGORIES_URL);
+  const all: CategoryMeta[] = [
+    ...INVENTORY_CATEGORIES.slice(0, -1),
+    ...(data || []).map((c) => ({ ...c, icon: Tag, tint: "bg-brand-100 text-brand-700", custom: true })),
+    INVENTORY_CATEGORIES[INVENTORY_CATEGORIES.length - 1],
+  ];
+  const update = (list: { value: string; label: string }[]) => {
+    setData(list);
+    primeApiCache(CATEGORIES_URL, list);
+  };
+  return { all, update };
+}
+
+export const categoryMeta = (c: string, list: CategoryMeta[] = INVENTORY_CATEGORIES): CategoryMeta =>
+  list.find((x) => x.value === c) || INVENTORY_CATEGORIES[INVENTORY_CATEGORIES.length - 1];
 
 export function LevelBadge({ item }: { item: Pick<InventoryItem, "stock" | "minStock"> }) {
   const level = stockLevel(item);
@@ -96,6 +115,36 @@ export function ItemFormSheet({
   const toast = useToast();
   const [form, setForm] = useState(EMPTY_ITEM);
   const [saving, setSaving] = useState(false);
+  const categories = useInventoryCategories();
+  const [newCat, setNewCat] = useState<string | null>(null);
+  const [addingCat, setAddingCat] = useState(false);
+
+  const addCategory = async () => {
+    if (!newCat?.trim()) return;
+    setAddingCat(true);
+    try {
+      const list = await api<{ value: string; label: string }[]>(CATEGORIES_URL, { method: "POST", body: { label: newCat } });
+      categories.update(list);
+      const added = list[list.length - 1];
+      setForm((f) => ({ ...f, category: added.value }));
+      setNewCat(null);
+      toast(`Category "${added.label}" added`);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setAddingCat(false);
+    }
+  };
+
+  const removeCategory = async (value: string) => {
+    try {
+      const list = await api<{ value: string; label: string }[]>(`${CATEGORIES_URL}?value=${encodeURIComponent(value)}`, { method: "DELETE" });
+      categories.update(list);
+      if (form.category === value) setForm((f) => ({ ...f, category: "other" }));
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -151,7 +200,7 @@ export function ItemFormSheet({
         </Field>
         <Field label="Category">
           <div className="grid grid-cols-3 gap-2">
-            {INVENTORY_CATEGORIES.map((c) => (
+            {categories.all.map((c) => (
               <button
                 key={c.value}
                 type="button"
@@ -165,7 +214,50 @@ export function ItemFormSheet({
                 {c.label}
               </button>
             ))}
+            {newCat === null && (
+              <button
+                type="button"
+                onClick={() => setNewCat("")}
+                className="flex flex-col items-center gap-1 rounded-xl border-2 border-dashed border-slate-300 px-1 py-2 text-[11px] font-semibold leading-tight text-brand-600"
+              >
+                <Plus className="size-5" />
+                New category
+              </button>
+            )}
           </div>
+          {newCat !== null && (
+            <div className="mt-2 flex gap-2">
+              <Input
+                value={newCat}
+                onChange={(e) => setNewCat(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCategory())}
+                placeholder="e.g. Ceramic sprays"
+                maxLength={30}
+                autoFocus
+              />
+              <Button onClick={addCategory} loading={addingCat} disabled={!newCat.trim()}>
+                Add
+              </Button>
+              <Button variant="outline" onClick={() => setNewCat(null)} aria-label="Cancel">
+                <X className="size-4" />
+              </Button>
+            </div>
+          )}
+          {newCat !== null && categories.all.some((c) => c.custom) && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+              Your categories:
+              {categories.all
+                .filter((c) => c.custom)
+                .map((c) => (
+                  <span key={c.value} className="flex items-center gap-1 rounded-full bg-slate-100 py-0.5 pl-2.5 pr-1 font-medium text-slate-700">
+                    {c.label}
+                    <button type="button" onClick={() => removeCategory(c.value)} className="rounded-full p-0.5 hover:bg-slate-200" aria-label={`Remove ${c.label}`}>
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+            </div>
+          )}
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Unit">

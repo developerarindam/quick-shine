@@ -80,8 +80,11 @@ function NewJobForm() {
   const [discount, setDiscount] = useState("");
 
   // ── Payment & workflow ──
-  const [paymentType, setPaymentType] = useState<PaymentType>("cash");
+  const [paymentType, setPaymentType] = useState<PaymentType | "split">("cash");
   const [advance, setAdvance] = useState("");
+  // Cash + Online: online follows "total − cash" until it's typed in by hand
+  const [splitCash, setSplitCash] = useState("");
+  const [splitOnline, setSplitOnline] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus>("in_progress");
   const [assignedTo, setAssignedTo] = useState(user.id);
   const [notes, setNotes] = useState("");
@@ -155,6 +158,11 @@ function NewJobForm() {
     discountType
   );
 
+  const cashPart = Number(splitCash) || 0;
+  const onlinePart = splitOnline === null ? Math.max(0, totals.total - cashPart) : Number(splitOnline) || 0;
+  const splitLeft = Math.round((totals.total - cashPart - onlinePart) * 100) / 100;
+  const takesCash = paymentType === "cash" || (paymentType === "due" && Number(advance) > 0) || (paymentType === "split" && cashPart > 0);
+
   // ── Save ──
   const canSave = (bike || isNewBike) && lines.length > 0;
 
@@ -175,6 +183,11 @@ function NewJobForm() {
       return;
     }
 
+    if (paymentType === "split") {
+      if (splitLeft < 0) return toast("Cash + online is more than the bill", "error");
+      if (cashPart <= 0 || onlinePart <= 0) return toast("Enter both the cash and the online amount", "error");
+    }
+
     setSaving(true);
     try {
       const job = await api<{ _id: string; jobNo: number; lowStock: { name: string }[] }>("/api/service-entry", {
@@ -187,6 +200,7 @@ function NewJobForm() {
           discountType,
           paymentType,
           advance: paymentType === "due" ? Number(advance) || 0 : 0,
+          ...(paymentType === "split" ? { cashAmount: cashPart, onlineAmount: onlinePart } : {}),
           status,
           assignedTo,
           notes,
@@ -511,18 +525,42 @@ function NewJobForm() {
             onChange={setPaymentType}
             options={[
               { value: "cash", label: "Cash" },
-              { value: "online", label: "UPI / Online" },
+              { value: "online", label: "Online" },
+              { value: "split", label: <span className="leading-tight">Cash + Online</span> },
               { value: "due", label: "Pay later" },
             ]}
           />
         </Field>
+        {paymentType === "split" && (
+          <div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Cash">
+                <MoneyInput value={splitCash} onChange={(e) => setSplitCash(e.target.value)} placeholder="0" autoFocus />
+              </Field>
+              <Field label="Online">
+                <MoneyInput
+                  value={splitOnline ?? (cashPart > 0 ? String(Math.max(0, totals.total - cashPart)) : "")}
+                  onChange={(e) => setSplitOnline(e.target.value)}
+                  placeholder="0"
+                />
+              </Field>
+            </div>
+            <p className={cn("mt-2 text-xs", splitLeft < 0 ? "font-medium text-red-600" : splitLeft > 0 ? "font-medium text-amber-700" : "text-slate-500")}>
+              {splitLeft < 0
+                ? `${inr(-splitLeft)} more than the bill of ${inr(totals.total)}`
+                : splitLeft > 0
+                  ? `${inr(splitLeft)} left as due`
+                  : `Cash ${inr(cashPart)} + Online ${inr(onlinePart)} = ${inr(totals.total)}`}
+            </p>
+          </div>
+        )}
         {paymentType === "due" && (
           <Field label="Advance received (cash)" hint="Leave empty if nothing was paid yet">
             <MoneyInput value={advance} onChange={(e) => setAdvance(e.target.value)} placeholder="0" />
           </Field>
         )}
-        {paymentType === "online" && <OnlinePayeeNote />}
-        {(paymentType === "cash" || (paymentType === "due" && Number(advance) > 0)) && (
+        {(paymentType === "online" || paymentType === "split") && <OnlinePayeeNote />}
+        {takesCash && (
           <Field label="Cash collected by" hint="This person holds the cash until they hand it over">
             <Select value={collectedBy} onChange={(e) => setCollectedBy(e.target.value)}>
               {(team.data || [{ _id: user.id, name: user.name }]).map((m) => (
@@ -581,6 +619,7 @@ function NewJobForm() {
             <p className="text-xs text-slate-500">
               {lines.length} service{lines.length === 1 ? "" : "s"}
               {paymentType === "due" ? " · pay later" : ""}
+              {paymentType === "split" ? (splitLeft > 0 ? " · part paid" : " · cash + online") : ""}
               {backdated ? ` · ${fmtDate(new Date(jobDate))}` : ""}
             </p>
             <p className="text-xl font-bold tabular-nums text-slate-900">{inr(totals.total)}</p>
