@@ -1,6 +1,6 @@
 import CashHandover from "@/app/models/CashHandover";
 import { fail, ok, withAuth } from "@/app/lib/auth";
-import { can } from "@/app/lib/roles";
+import { allowed } from "@/app/lib/roles";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -23,7 +23,7 @@ export const PATCH = withAuth<Ctx>(null, async (req, { params }, user) => {
     if (!isSender) return fail("Only the sender can cancel this request", 403);
     request.status = "cancelled";
   } else if (action === "approve" || action === "reject") {
-    if (!can.approveCash(user.role)) return fail("Only a Super Admin or Admin can approve handovers", 403);
+    if (!allowed(user, "approveCash")) return fail("You don't have permission to approve handovers", 403);
     if (isSender) return fail("Someone else has to approve your own handover", 403);
     request.status = action === "approve" ? "approved" : "rejected";
     request.to = user.id;

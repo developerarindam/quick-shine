@@ -4,12 +4,11 @@ import Expense from "@/app/models/Expense";
 import "@/app/models/Service";
 import "@/app/models/User";
 import { ok, parseRange, withAuth } from "@/app/lib/auth";
-import { MANAGERS } from "@/app/lib/roles";
 import { collectionsBetween, outstandingDues, sumByMode } from "@/app/lib/finance";
 
 type Bucket = { key: string; billed: number; collected: number; expenses: number; jobs: number };
 
-export const GET = withAuth(MANAGERS, async (req) => {
+export const GET = withAuth("viewReports", async (req) => {
   const { searchParams } = new URL(req.url);
   const { from, to } = parseRange(searchParams);
   // Client's getTimezoneOffset(), so days are grouped in the studio's local time

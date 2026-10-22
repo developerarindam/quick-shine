@@ -28,7 +28,7 @@ import {
 import { api, useApi } from "@/app/lib/api";
 import { LIST_KEYS, useListBackHref } from "@/app/lib/listState";
 import { OnlinePayeeNote } from "@/app/components/OnlinePayeeNote";
-import { can } from "@/app/lib/roles";
+import { allowed, can } from "@/app/lib/roles";
 import { JOB_STATUSES, STATUS_META, balanceOf, jobLabel, paidOf, type JobStatus, type PaymentMode } from "@/app/lib/jobs";
 import { fmtDateTime, fmtWhen, inr, phoneDigits, toDateTimeInput } from "@/app/lib/format";
 import { serviceName, type Job, type TeamMember } from "@/app/lib/types";
@@ -135,7 +135,7 @@ export default function JobDetailPage() {
           <IconButton label="Print receipt" onClick={() => window.print()} className="max-sm:hidden">
             <Printer className="size-5" />
           </IconButton>
-          {can.manageStudio(user.role) && (
+          {allowed(user, "deleteJobs") && (
             <IconButton label="Delete job" onClick={remove} className="text-red-500 hover:bg-red-50">
               <Trash2 className="size-5" />
             </IconButton>

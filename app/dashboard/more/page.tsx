@@ -1,31 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, CalendarCheck, ChevronRight, FileSpreadsheet, Globe, LogOut, Package, Receipt, Sparkles, UserCircle, Users, Wallet } from "lucide-react";
+import { BarChart3, CalendarCheck, ChevronRight, FileSpreadsheet, Globe, History, LogOut, Package, Receipt, ShieldCheck, Sparkles, UserCircle, Users, Wallet } from "lucide-react";
 import { useLowStock, usePendingHandovers, useSession } from "@/app/components/AppShell";
 import { Avatar, Badge, Card, Page, SectionTitle } from "@/app/components/ui";
-import { can, ROLE_LABEL } from "@/app/lib/roles";
+import { allowed, can, ROLE_LABEL } from "@/app/lib/roles";
 
 export default function MorePage() {
   const user = useSession();
   const lowStock = useLowStock();
   const handovers = usePendingHandovers();
-  const toApprove = can.approveCash(user.role) ? handovers.pending.length : 0;
+  const toApprove = allowed(user, "approveCash") ? handovers.pending.length : 0;
 
   const manage = [
-    { href: "/dashboard/reports", icon: BarChart3, label: "Reports", sub: "Revenue, profit, top services", show: can.manageStudio(user.role), color: "bg-brand-100 text-brand-700" },
+    { href: "/dashboard/reports", icon: BarChart3, label: "Reports", sub: "Revenue, profit, top services", show: allowed(user, "viewReports"), color: "bg-brand-100 text-brand-700" },
     {
       href: "/dashboard/inventory",
       icon: Package,
       label: "Inventory",
       sub: lowStock.items.length ? `${lowStock.items.length} item(s) need restocking` : "Stock levels and restock alerts",
-      show: can.manageStudio(user.role),
+      show: allowed(user, "manageInventory"),
       color: "bg-sky-100 text-sky-700",
       badge: lowStock.items.length,
     },
     { href: "/dashboard/expenses", icon: Receipt, label: "Expenses", sub: "Supplies, salaries, rent", show: can.manageStudio(user.role), color: "bg-amber-100 text-amber-700" },
-    { href: "/dashboard/services", icon: Sparkles, label: "Services & pricing", sub: "What you offer and for how much", show: can.manageStudio(user.role), color: "bg-violet-100 text-violet-700" },
+    { href: "/dashboard/services", icon: Sparkles, label: "Services & pricing", sub: "What you offer and for how much", show: allowed(user, "manageServices"), color: "bg-violet-100 text-violet-700" },
     { href: "/dashboard/users", icon: Users, label: "Team", sub: "Staff accounts and roles", show: can.manageUsers(user.role), color: "bg-emerald-100 text-emerald-700" },
+    { href: "/dashboard/permissions", icon: ShieldCheck, label: "Permissions", sub: "What Admins and Staff may do", show: can.manageUsers(user.role), color: "bg-rose-100 text-rose-700" },
+    { href: "/dashboard/activity", icon: History, label: "Activity log", sub: "Who did what, and when", show: can.manageUsers(user.role), color: "bg-indigo-100 text-indigo-700" },
     { href: "/dashboard/import", icon: FileSpreadsheet, label: "Import old data", sub: "Upload previous months from Excel", show: can.editHistory(user.role), color: "bg-slate-100 text-slate-700" },
   ].filter((i) => i.show);
 
@@ -61,7 +63,7 @@ export default function MorePage() {
           sub={
             toApprove
               ? `${toApprove} handover(s) waiting for your approval`
-              : can.approveCash(user.role)
+              : allowed(user, "approveCash")
                 ? "Approve handovers, see who holds cash"
                 : handovers.pending.length
                   ? "Your handover is waiting for approval"
@@ -70,7 +72,7 @@ export default function MorePage() {
           color="bg-emerald-100 text-emerald-700"
           badge={toApprove}
         />
-        {!can.manageStudio(user.role) && (
+        {!can.manageStudio(user.role) && allowed(user, "recordExpenses") && (
           <MenuRow href="/dashboard/expenses" icon={Receipt} label="My expenses" sub="Record what you paid in cash" color="bg-amber-100 text-amber-700" />
         )}
       </Card>

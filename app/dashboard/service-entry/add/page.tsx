@@ -23,7 +23,7 @@ import {
 import { api, useApi } from "@/app/lib/api";
 import { STATUS_META, calcTotals, type DiscountType, type JobStatus, type PaymentType } from "@/app/lib/jobs";
 import { fmtDate, fmtDateTime, inr, toDateTimeInput } from "@/app/lib/format";
-import { can } from "@/app/lib/roles";
+import { allowed, can } from "@/app/lib/roles";
 import { OnlinePayeeNote } from "@/app/components/OnlinePayeeNote";
 import type { Bike, Service, TeamMember } from "@/app/lib/types";
 
@@ -91,6 +91,9 @@ function NewJobForm() {
   const [collectedBy, setCollectedBy] = useState(user.id);
   // Super Admin can enter an older job; untouched means "now" (set by the server)
   const canBackdate = can.editHistory(user.role);
+  // without these permissions the list / combo price is billed and there's no discount
+  const canSetPrice = allowed(user, "editPrices");
+  const canDiscount = allowed(user, "giveDiscount");
   const [jobDate, setJobDate] = useState(() => toDateTimeInput(new Date()));
   const [dateTouched, setDateTouched] = useState(false);
   const backdated = dateTouched && new Date(jobDate).getTime() < Date.now() - 10 * 60 * 1000;
@@ -411,18 +414,22 @@ function NewJobForm() {
                     <span className="ml-1.5 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">combo price</span>
                   )}
                 </span>
-                <div className="relative w-28">
-                  <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    value={l.price}
-                    aria-label={`Price for ${l.name}`}
-                    onChange={(e) => setLines((prev) => prev.map((x, j) => (j === i ? { ...x, price: e.target.value, edited: true } : x)))}
-                    className="h-10 w-full rounded-lg border border-slate-200 pl-6 pr-2 text-right text-base font-semibold tabular-nums outline-none focus:border-brand-500"
-                  />
-                </div>
+                {!canSetPrice ? (
+                  <span className="text-base font-semibold tabular-nums text-slate-900">{inr(Number(l.price) || 0)}</span>
+                ) : (
+                  <div className="relative w-28">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      value={l.price}
+                      aria-label={`Price for ${l.name}`}
+                      onChange={(e) => setLines((prev) => prev.map((x, j) => (j === i ? { ...x, price: e.target.value, edited: true } : x)))}
+                      className="h-10 w-full rounded-lg border border-slate-200 pl-6 pr-2 text-right text-base font-semibold tabular-nums outline-none focus:border-brand-500"
+                    />
+                  </div>
+                )}
                 <button
                   type="button"
                   aria-label={`Remove ${l.name}`}
@@ -434,46 +441,48 @@ function NewJobForm() {
               </div>
             ))}
 
-            <div className="space-y-3 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="flex-1 text-sm font-medium text-slate-700">Discount</span>
-                <Segmented
-                  size="sm"
-                  className="w-24"
-                  value={discountType}
-                  onChange={setDiscountType}
-                  options={[
-                    { value: "flat", label: "₹" },
-                    { value: "percent", label: "%" },
-                  ]}
-                />
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  value={discount}
-                  placeholder="0"
-                  aria-label="Discount"
-                  onChange={(e) => setDiscount(e.target.value)}
-                  className="h-10 w-24 rounded-lg border border-slate-200 px-2 text-right text-base font-semibold tabular-nums outline-none focus:border-brand-500"
-                />
+            {canDiscount && (
+              <div className="space-y-3 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-sm font-medium text-slate-700">Discount</span>
+                  <Segmented
+                    size="sm"
+                    className="w-24"
+                    value={discountType}
+                    onChange={setDiscountType}
+                    options={[
+                      { value: "flat", label: "₹" },
+                      { value: "percent", label: "%" },
+                    ]}
+                  />
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    value={discount}
+                    placeholder="0"
+                    aria-label="Discount"
+                    onChange={(e) => setDiscount(e.target.value)}
+                    className="h-10 w-24 rounded-lg border border-slate-200 px-2 text-right text-base font-semibold tabular-nums outline-none focus:border-brand-500"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(discountType === "flat" ? [0, 50, 100, 200] : [0, 5, 10, 15]).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setDiscount(v ? String(v) : "")}
+                      className={cn(
+                        "h-8 rounded-full border px-3 text-xs font-semibold",
+                        (Number(discount) || 0) === v ? "border-brand-600 bg-brand-600 text-white" : "border-slate-200 text-slate-600"
+                      )}
+                    >
+                      {v === 0 ? "None" : discountType === "flat" ? `₹${v}` : `${v}%`}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {(discountType === "flat" ? [0, 50, 100, 200] : [0, 5, 10, 15]).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setDiscount(v ? String(v) : "")}
-                    className={cn(
-                      "h-8 rounded-full border px-3 text-xs font-semibold",
-                      (Number(discount) || 0) === v ? "border-brand-600 bg-brand-600 text-white" : "border-slate-200 text-slate-600"
-                    )}
-                  >
-                    {v === 0 ? "None" : discountType === "flat" ? `₹${v}` : `${v}%`}
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
 
             <div className="space-y-1 bg-slate-50/70 px-4 py-3 text-sm">
               <Row label="Subtotal" value={inr(totals.subtotal)} />

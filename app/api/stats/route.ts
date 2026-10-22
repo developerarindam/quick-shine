@@ -4,15 +4,16 @@ import Expense from "@/app/models/Expense";
 import { ok, parseRange, withAuth } from "@/app/lib/auth";
 import { can } from "@/app/lib/roles";
 import { ACTIVE_STATUSES } from "@/app/lib/jobs";
+import { jobScope } from "@/app/lib/jobEntry";
 import { collectionsBetween, outstandingDues, sumByMode } from "@/app/lib/finance";
 
 export const GET = withAuth(null, async (req, _ctx, user) => {
   const { from, to } = parseRange(new URL(req.url).searchParams);
 
   const [jobs, statusAgg] = await Promise.all([
-    ServiceEntry.find({ createdAt: { $gte: from, $lte: to } }).select("total status").lean(),
+    ServiceEntry.find({ createdAt: { $gte: from, $lte: to }, ...jobScope(user) }).select("total status").lean(),
     ServiceEntry.aggregate([
-      { $match: { status: { $in: ACTIVE_STATUSES } } },
+      { $match: { status: { $in: ACTIVE_STATUSES }, ...jobScope(user) } },
       { $group: { _id: "$status", count: { $sum: 1 } } },
     ]),
   ]);

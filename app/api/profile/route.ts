@@ -1,7 +1,8 @@
 import User from "@/app/models/User";
-import { clearSessionCache, fail, ok, withAuth } from "@/app/lib/auth";
+import { clearSessionCache, fail, ok, setSessionCookie, signSession, withAuth } from "@/app/lib/auth";
 
-// Update own name/phone, and optionally change password (requires the current one)
+// Update own name/phone, and optionally change password (requires the current one).
+// A new password signs out every other device; this one gets a fresh session.
 export const PUT = withAuth(null, async (req, _ctx, session) => {
   const { name, phone, currentPassword, newPassword } = await req.json();
 
@@ -15,8 +16,8 @@ export const PUT = withAuth(null, async (req, _ctx, session) => {
   if (phone !== undefined) user.phone = String(phone).trim();
 
   if (newPassword) {
-    if (String(newPassword).length < 6) return fail("New password must be at least 6 characters");
-    if (!currentPassword || !(await user.comparePassword(currentPassword))) {
+    if (String(newPassword).length < 8) return fail("New password must be at least 8 characters");
+    if (typeof currentPassword !== "string" || !currentPassword || !(await user.comparePassword(currentPassword))) {
       return fail("Current password is incorrect");
     }
     user.password = newPassword;
@@ -24,5 +25,6 @@ export const PUT = withAuth(null, async (req, _ctx, session) => {
 
   await user.save();
   clearSessionCache();
-  return ok({ id: String(user._id), name: user.name, email: user.email, phone: user.phone, role: user.role });
+  const res = ok({ id: String(user._id), name: user.name, email: user.email, phone: user.phone, role: user.role });
+  return newPassword ? setSessionCookie(res, signSession(user)) : res;
 });

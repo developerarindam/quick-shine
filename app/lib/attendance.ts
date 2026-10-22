@@ -1,5 +1,6 @@
 // Server-side attendance: studio day, shop geofence.
 import { getSetting } from "@/app/models/Setting";
+import { InputError } from "@/app/lib/jobEntry";
 
 export const STUDIO_TZ = process.env.STUDIO_TZ || "Asia/Kolkata";
 
@@ -46,11 +47,11 @@ export function cleanBreaks(raw: unknown, signIn: Date, signOut: Date | null, ex
   const list = raw.map((b, i) => {
     const start = new Date(b?.start);
     const end = b?.end ? new Date(b.end) : null;
-    if (Number.isNaN(start.getTime()) || (end && Number.isNaN(end.getTime()))) throw new Error(`Break ${i + 1} has an invalid time`);
-    if (end && end <= start) throw new Error(`Break ${i + 1} must end after it starts`);
-    if (start < signIn) throw new Error(`Break ${i + 1} starts before sign-in`);
-    if (signOut && (start >= signOut || (end && end > signOut))) throw new Error(`Break ${i + 1} must be before sign-out`);
-    if (signOut && !end) throw new Error(`Break ${i + 1} needs an end time (the shift is signed out)`);
+    if (Number.isNaN(start.getTime()) || (end && Number.isNaN(end.getTime()))) throw new InputError(`Break ${i + 1} has an invalid time`);
+    if (end && end <= start) throw new InputError(`Break ${i + 1} must end after it starts`);
+    if (start < signIn) throw new InputError(`Break ${i + 1} starts before sign-in`);
+    if (signOut && (start >= signOut || (end && end > signOut))) throw new InputError(`Break ${i + 1} must be before sign-out`);
+    if (signOut && !end) throw new InputError(`Break ${i + 1} needs an end time (the shift is signed out)`);
     // keep the GPS details of punches whose time didn't change
     const same = existing.find((e) => e.start.at.getTime() === start.getTime());
     return {
@@ -61,7 +62,7 @@ export function cleanBreaks(raw: unknown, signIn: Date, signOut: Date | null, ex
   list.sort((a, b) => a.start.at.getTime() - b.start.at.getTime());
   for (let i = 1; i < list.length; i++) {
     const prevEnd = list[i - 1].end?.at;
-    if (!prevEnd || prevEnd > list[i].start.at) throw new Error("Breaks overlap — check the times");
+    if (!prevEnd || prevEnd > list[i].start.at) throw new InputError("Breaks overlap — check the times");
   }
   return list;
 }

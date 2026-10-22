@@ -3,12 +3,11 @@ import InventoryItem, { INVENTORY_CATEGORIES } from "@/app/models/InventoryItem"
 import { setSetting } from "@/app/models/Setting";
 import { fail, ok, withAuth } from "@/app/lib/auth";
 import { CATEGORY_SETTING, customCategories } from "@/app/lib/inventory";
-import { MANAGERS } from "@/app/lib/roles";
 
-export const GET = withAuth(MANAGERS, async () => ok(await customCategories()));
+export const GET = withAuth("manageInventory", async () => ok(await customCategories()));
 
 /** { label } → adds a category; returns the new list */
-export const POST = withAuth(MANAGERS, async (req) => {
+export const POST = withAuth("manageInventory", async (req) => {
   const label = String((await req.json()).label || "").trim().replace(/\s+/g, " ");
   if (!label) return fail("Enter a category name");
   if (label.length > 30) return fail("Keep the name under 30 characters");
@@ -24,7 +23,7 @@ export const POST = withAuth(MANAGERS, async (req) => {
 });
 
 /** ?value=<category> → removes a category that no item uses */
-export const DELETE = withAuth(MANAGERS, async (req) => {
+export const DELETE = withAuth("manageInventory", async (req) => {
   const value = new URL(req.url).searchParams.get("value") || "";
   const list = await customCategories();
   if (!list.some((c) => c.value === value)) return fail("Category not found", 404);

@@ -1,10 +1,28 @@
 // Server-side validation shared by job create / edit / payment routes.
+import { Types } from "mongoose";
 import User from "@/app/models/User";
-import { can, type SessionUser } from "@/app/lib/roles";
+import { allowed, can, type SessionUser } from "@/app/lib/roles";
 
 /** A validation problem to show the user (returned as HTTP 400). */
 export class InputError extends Error {
   name = "InputError";
+}
+
+/**
+ * Which jobs someone may see: everyone with "See every job" → all; otherwise only jobs
+ * assigned to them or that they entered. ObjectIds so it also works inside aggregate $match.
+ */
+export function jobScope(user: SessionUser): Record<string, unknown> {
+  if (allowed(user, "seeAllJobs")) return {};
+  const id = new Types.ObjectId(user.id);
+  return { $or: [{ assignedTo: id }, { createdBy: id }] };
+}
+
+/** True when this (staff) user may open / act on the job. */
+export function canSeeJob(user: SessionUser, job: { assignedTo?: unknown; createdBy?: unknown }) {
+  if (allowed(user, "seeAllJobs")) return true;
+  const ref = (v: unknown) => (v && typeof v === "object" && "_id" in v ? String((v as { _id: unknown })._id) : String(v));
+  return ref(job.assignedTo) === user.id || ref(job.createdBy) === user.id;
 }
 
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;

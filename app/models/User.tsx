@@ -19,6 +19,7 @@ export interface IUser extends Document {
   role: "ADMIN" | "MANAGER" | "USER";
   status: "Active" | "Inactive";
   pay?: { type: "daily" | "hourly" | "monthly"; rate: number };
+  tokenVersion: number;
   createdAt: Date;
   updatedAt: Date;
 
@@ -74,6 +75,12 @@ const UserSchema = new Schema<IUser>(
       type: { type: String, enum: ["daily", "hourly", "monthly"] },
       rate: { type: Number, min: 0 },
     },
+
+    // Bumped to sign this person out everywhere (password / role change, account disabled)
+    tokenVersion: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -85,6 +92,9 @@ const UserSchema = new Schema<IUser>(
 ========================= */
 
 UserSchema.pre<IUser>("save", async function () {
+  if (!this.isNew && (this.isModified("password") || this.isModified("role") || (this.isModified("status") && this.status !== "Active"))) {
+    this.tokenVersion = (this.tokenVersion || 0) + 1;
+  }
   if (!this.isModified("password")) return;
 
   const salt = await bcrypt.genSalt(12);

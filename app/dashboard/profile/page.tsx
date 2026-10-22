@@ -74,7 +74,7 @@ export default function ProfilePage() {
         <Field label="Current password">
           <Input type="password" autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} />
         </Field>
-        <Field label="New password" hint="At least 6 characters">
+        <Field label="New password" hint="At least 8 characters">
           <Input type="password" autoComplete="new-password" value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} />
         </Field>
         <Field label="Confirm new password">

@@ -3,12 +3,15 @@ import Bike from "@/app/models/Bike";
 import ServiceEntry from "@/app/models/ServiceEntry";
 import { bikeNumberRegex, fail, normalizeBikeNumber, ok, withAuth } from "@/app/lib/auth";
 import { ACTIVE_STATUSES } from "@/app/lib/jobs";
+import { jobScope } from "@/app/lib/jobEntry";
 
-// All bikes with visit stats (count, last visit, total spent), most recent first
-export const GET = withAuth(null, async () => {
+// All bikes with visit stats (count, last visit, total spent), most recent first.
+// Staff can look up any bike to start a job, but the stats only cover their own jobs.
+export const GET = withAuth(null, async (_req, _ctx, user) => {
   const [bikes, stats] = await Promise.all([
     Bike.find().sort({ updatedAt: -1 }).lean(),
     ServiceEntry.aggregate([
+      { $match: jobScope(user) },
       {
         $group: {
           _id: "$bikeId",

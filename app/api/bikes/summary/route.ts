@@ -2,10 +2,11 @@
 // Payments count on the day they were received, so a due cleared today shows in today's cash.
 import ServiceEntry from "@/app/models/ServiceEntry";
 import { ok, parseRange, withAuth } from "@/app/lib/auth";
+import { jobScope } from "@/app/lib/jobEntry";
 
 type Row = { jobs: number; billed: number; cash: number; online: number };
 
-export const GET = withAuth(null, async (req) => {
+export const GET = withAuth(null, async (req, _ctx, user) => {
   const { from, to } = parseRange(new URL(req.url).searchParams);
   const inRange = (d: Date | string) => {
     const t = new Date(d).getTime();
@@ -13,7 +14,7 @@ export const GET = withAuth(null, async (req) => {
   };
 
   const jobs = await ServiceEntry.find({
-    $or: [{ createdAt: { $gte: from, $lte: to } }, { "payments.at": { $gte: from, $lte: to } }],
+    $and: [{ $or: [{ createdAt: { $gte: from, $lte: to } }, { "payments.at": { $gte: from, $lte: to } }] }, jobScope(user)],
   })
     .select("bikeId total createdAt payments paidAmount paymentType")
     .lean();

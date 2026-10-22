@@ -28,8 +28,8 @@ export async function POST(req: Request) {
     if (!name || !email || !password) {
       return fail("All fields are required");
     }
-    if (String(password).length < 6) {
-      return fail("Password must be at least 6 characters");
+    if (String(password).length < 8) {
+      return fail("Password must be at least 8 characters");
     }
 
     await User.create({ name, email, password, role: "ADMIN", status: "Active" });

@@ -8,7 +8,7 @@ import { PERIOD_LABEL, PeriodPicker, usePeriod } from "@/app/components/PeriodPi
 import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Field, Input, ListSkeleton, MoneyInput, Page, SectionTitle, cn } from "@/app/components/ui";
 import { api, useApi } from "@/app/lib/api";
 import { fmtWhen, inr, rangeQuery } from "@/app/lib/format";
-import { ROLE_LABEL, can } from "@/app/lib/roles";
+import { allowed, ROLE_LABEL } from "@/app/lib/roles";
 import type { CashPosition, Handover } from "@/app/lib/types";
 
 type CashData = {
@@ -25,7 +25,7 @@ export default function CashPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const handoverCtx = usePendingHandovers();
-  const approver = can.approveCash(user.role);
+  const approver = allowed(user, "approveCash");
 
   const period = usePeriod("today");
   const { data, loading, error, reload } = useApi<CashData>(`/api/cash?${rangeQuery(period.range)}`);

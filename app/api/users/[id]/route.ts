@@ -23,7 +23,7 @@ export const PUT = withAuth<Ctx>(["ADMIN"], async (req, { params }, session) => 
   if (role) user.role = role;
   if (status) user.status = status;
   if (password) {
-    if (String(password).length < 6) return fail("Password must be at least 6 characters");
+    if (String(password).length < 8) return fail("Password must be at least 8 characters");
     user.password = password; // hashed by the pre-save hook
   }
 

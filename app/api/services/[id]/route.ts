@@ -1,7 +1,6 @@
 import Service from "@/app/models/Service";
 import ServiceEntry from "@/app/models/ServiceEntry";
 import { fail, ok, withAuth } from "@/app/lib/auth";
-import { MANAGERS } from "@/app/lib/roles";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -11,7 +10,7 @@ function cleanConsumes(list: { item?: string; qty?: number | string }[]) {
 
 const FIELDS = ["name", "code", "price", "comboPrice", "category", "description", "duration", "sortOrder", "isActive"] as const;
 
-export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
+export const PUT = withAuth<Ctx>("manageServices", async (req, { params }) => {
   const { id } = await params;
   const body = await req.json();
 
@@ -31,7 +30,7 @@ export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
   return ok(service);
 });
 
-export const DELETE = withAuth<Ctx>(MANAGERS, async (_req, { params }) => {
+export const DELETE = withAuth<Ctx>("manageServices", async (_req, { params }) => {
   const { id } = await params;
 
   // Services used in past jobs are archived so old bills keep their line items

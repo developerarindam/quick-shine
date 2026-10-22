@@ -3,7 +3,6 @@ import Expense from "@/app/models/Expense";
 import { fail, ok, withAuth } from "@/app/lib/auth";
 import { applyStockChange } from "@/app/lib/inventory";
 import { expensePayer } from "@/app/lib/jobEntry";
-import { MANAGERS } from "@/app/lib/roles";
 import { round2 } from "@/app/lib/jobs";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -13,7 +12,7 @@ type Ctx = { params: Promise<{ id: string }> };
  * { type: "out",    qty, note? }                                  → manual use / wastage
  * { type: "adjust", qty, note? }                                  → set the counted stock to exactly qty
  */
-export const POST = withAuth<Ctx>(MANAGERS, async (req, { params }, user) => {
+export const POST = withAuth<Ctx>("manageInventory", async (req, { params }, user) => {
   const { id } = await params;
   const { type, qty, unitCost, note, recordExpense, mode } = await req.json();
 

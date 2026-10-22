@@ -1,6 +1,5 @@
 import Service from "@/app/models/Service";
 import { fail, ok, withAuth } from "@/app/lib/auth";
-import { MANAGERS } from "@/app/lib/roles";
 
 // Active services by default; ?all=1 includes inactive ones (catalog management)
 export const GET = withAuth(null, async (req) => {
@@ -10,7 +9,7 @@ export const GET = withAuth(null, async (req) => {
   return ok(services);
 });
 
-export const POST = withAuth(MANAGERS, async (req) => {
+export const POST = withAuth("manageServices", async (req) => {
   const body = await req.json();
   if (!body.name || !String(body.name).trim()) return fail("Service name is required");
   if (body.price === undefined || body.price === "" || Number(body.price) < 0) return fail("Enter a valid price");

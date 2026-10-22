@@ -39,7 +39,7 @@ import {
 } from "@/app/lib/format";
 import type { PaymentMode } from "@/app/lib/jobs";
 import type { Expense, TeamMember } from "@/app/lib/types";
-import { can } from "@/app/lib/roles";
+import { allowed, can } from "@/app/lib/roles";
 
 const CATEGORIES = [
   { value: "supplies", label: "Supplies", icon: Droplets },
@@ -77,6 +77,7 @@ function Expenses() {
   const params = useSearchParams();
   const user = useSession();
   const manager = can.manageStudio(user.role);
+  const canAdd = allowed(user, "recordExpenses");
   // only the Super Admin chooses / changes whose money paid
   const choosesPayer = can.editHistory(user.role);
   const team = useApi<TeamMember[]>(choosesPayer ? "/api/users?lite=1" : null);
@@ -178,9 +179,11 @@ function Expenses() {
       title="Expenses"
       back="/dashboard/more"
       actions={
-        <Button size="sm" className="max-lg:hidden" icon={<Plus className="size-4" />} onClick={() => openForm(null)}>
-          Add expense
-        </Button>
+        canAdd && (
+          <Button size="sm" className="max-lg:hidden" icon={<Plus className="size-4" />} onClick={() => openForm(null)}>
+            Add expense
+          </Button>
+        )
       }
     >
       <Chips
@@ -215,7 +218,7 @@ function Expenses() {
             icon={<Receipt />}
             title="No expenses recorded"
             text="Track shampoo, polish, salaries and rent to see your real profit."
-            action={<Button onClick={() => openForm(null)}>Add expense</Button>}
+            action={canAdd ? <Button onClick={() => openForm(null)}>Add expense</Button> : undefined}
           />
         </Card>
       ) : (
@@ -255,7 +258,7 @@ function Expenses() {
         ))
       )}
 
-      <Fab label="Add expense" icon={<Plus className="size-5" />} onClick={() => openForm(null)} />
+      {canAdd && <Fab label="Add expense" icon={<Plus className="size-5" />} onClick={() => openForm(null)} />}
 
       <Sheet
         open={open}

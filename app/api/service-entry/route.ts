@@ -4,16 +4,17 @@ import Service from "@/app/models/Service";
 import "@/app/models/User";
 import { nextSequence } from "@/app/models/Counter";
 import { consumeForJob } from "@/app/lib/inventory";
-import { collectorId, entryDate, receiverFor } from "@/app/lib/jobEntry";
+import { collectorId, entryDate, jobScope, receiverFor } from "@/app/lib/jobEntry";
 import { bikeNumberRegex, fail, normalizeBikeNumber, ok, parseRange, withAuth } from "@/app/lib/auth";
 import { ACTIVE_STATUSES, JOB_STATUSES, calcTotals, round2, type JobStatus } from "@/app/lib/jobs";
+import { allowed } from "@/app/lib/roles";
 
 /**
  * ?view=active → all unfinished jobs (any date)
  * ?view=due    → all jobs with money still to collect (any date)
  * otherwise    → jobs created in ?from=&to= (default: today)
  */
-export const GET = withAuth(null, async (req) => {
+export const GET = withAuth(null, async (req, _ctx, user) => {
   const { searchParams } = new URL(req.url);
   const view = searchParams.get("view");
 
@@ -30,7 +31,7 @@ export const GET = withAuth(null, async (req) => {
   const status = searchParams.get("status");
   if (status && JOB_STATUSES.includes(status as JobStatus)) filter.status = status;
 
-  const data = await ServiceEntry.find(filter)
+  const data = await ServiceEntry.find({ ...filter, ...jobScope(user) })
     .sort({ createdAt: view === "active" ? 1 : -1 })
     .lean();
 
@@ -83,24 +84,31 @@ export const POST = withAuth(null, async (req, _ctx, user) => {
   if (!bikeId) return fail("Select or enter a bike");
   if (!(await Bike.exists({ _id: bikeId }))) return fail("Bike not found", 404);
 
-  // 2. Services — snapshot names, keep the (possibly adjusted) price from the form
+  // 2. Services — snapshot names. Without "Change prices" the list price (or the combo price when
+  //    the job has 2+ services) is billed; without "Give discounts" there is no discount.
   if (!Array.isArray(body.services) || body.services.length === 0) {
     return fail("Select at least one service");
   }
+  const setsPrices = allowed(user, "editPrices");
   const catalog = await Service.find({ _id: { $in: body.services.map((s) => s.serviceId) } })
-    .select("name")
-    .lean();
-  const names = new Map(catalog.map((s) => [String(s._id), s.name]));
-  const items = body.services.map((s) => ({
-    serviceId: s.serviceId,
-    name: names.get(String(s.serviceId)),
-    price: Math.max(0, Number(s.price) || 0),
-  }));
+    .select("name price comboPrice")
+    .lean<{ _id: unknown; name: string; price: number; comboPrice?: number | null }[]>();
+  const byId = new Map(catalog.map((s) => [String(s._id), s]));
+  const combo = body.services.length > 1;
+  const items = body.services.map((s) => {
+    const svc = byId.get(String(s.serviceId));
+    const listPrice = svc ? (combo && typeof svc.comboPrice === "number" ? svc.comboPrice : svc.price) : 0;
+    return {
+      serviceId: s.serviceId,
+      name: svc?.name,
+      price: setsPrices ? Math.max(0, Number(s.price) || 0) : listPrice,
+    };
+  });
   if (items.some((i) => !i.name)) return fail("One of the selected services no longer exists");
 
   // 3. Totals & payment
   const discountType = body.discountType === "percent" ? "percent" : "flat";
-  const discount = Math.max(0, Number(body.discount) || 0);
+  const discount = allowed(user, "giveDiscount") ? Math.max(0, Number(body.discount) || 0) : 0;
   const { subtotal, total } = calcTotals(items.map((i) => i.price), discount, discountType);
 
   if (!["cash", "online", "due", "split"].includes(body.paymentType)) return fail("Choose a payment type");

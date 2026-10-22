@@ -18,8 +18,10 @@ import {
   Sparkles,
   UserCircle,
   Users,
+  ShieldCheck,
+  History,
 } from "lucide-react";
-import { can, ROLE_LABEL, type SessionUser } from "@/app/lib/roles";
+import { allowed, can, ROLE_LABEL, type SessionUser } from "@/app/lib/roles";
 import { useApi } from "@/app/lib/api";
 import type { LowStockItem } from "@/app/lib/types";
 import { OverlayProvider } from "./overlays";
@@ -54,13 +56,15 @@ const SIDEBAR: NavItem[] = [
   { name: "Home", href: "/dashboard", icon: Home },
   { name: "Jobs", href: "/dashboard/service-entry", icon: ClipboardList },
   { name: "Bikes & Customers", href: "/dashboard/bikes", icon: Bike },
-  { name: "Services", href: "/dashboard/services", icon: Sparkles, show: (u) => can.manageStudio(u.role) },
+  { name: "Services", href: "/dashboard/services", icon: Sparkles, show: (u) => allowed(u, "manageServices") },
   { name: "Attendance", href: "/dashboard/attendance", icon: CalendarCheck },
   { name: "Cash & handover", href: "/dashboard/cash", icon: Wallet },
-  { name: "Inventory", href: "/dashboard/inventory", icon: Package, show: (u) => can.manageStudio(u.role) },
+  { name: "Inventory", href: "/dashboard/inventory", icon: Package, show: (u) => allowed(u, "manageInventory") },
   { name: "Expenses", href: "/dashboard/expenses", icon: Receipt },
-  { name: "Reports", href: "/dashboard/reports", icon: BarChart3, show: (u) => can.manageStudio(u.role) },
+  { name: "Reports", href: "/dashboard/reports", icon: BarChart3, show: (u) => allowed(u, "viewReports") },
   { name: "Team", href: "/dashboard/users", icon: Users, show: (u) => can.manageUsers(u.role) },
+  { name: "Permissions", href: "/dashboard/permissions", icon: ShieldCheck, show: (u) => can.manageUsers(u.role) },
+  { name: "Activity log", href: "/dashboard/activity", icon: History, show: (u) => can.manageUsers(u.role) },
   { name: "My profile", href: "/dashboard/profile", icon: UserCircle },
 ];
 
@@ -91,7 +95,7 @@ export default function AppShell({ user, children }: { user: SessionUser; childr
   const hideTabs = hidesTabs(pathname);
 
   // Low-stock alerts for Super Admin / Admin, refreshed on every navigation
-  const lowStock = useApi<LowStockItem[]>(can.manageStudio(user.role) ? "/api/inventory?low=1" : null);
+  const lowStock = useApi<LowStockItem[]>(allowed(user, "manageInventory") ? "/api/inventory?low=1" : null);
   const reloadLowStock = lowStock.reload;
   const lowItems = lowStock.data || [];
 
@@ -114,7 +118,7 @@ export default function AppShell({ user, children }: { user: SessionUser; childr
   }, [pathname, reloadLowStock, reloadHandovers]);
   const pendingHandovers = handovers.data || [];
   // badge only when someone needs to act: approvers see requests to approve
-  const handoverAlert = can.approveCash(user.role) ? pendingHandovers.length : 0;
+  const handoverAlert = allowed(user, "approveCash") ? pendingHandovers.length : 0;
 
   return (
     <SessionCtx.Provider value={user}>

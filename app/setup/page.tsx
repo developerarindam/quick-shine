@@ -44,8 +44,8 @@ export default function SetupPage() {
         <Field label="Email">
           <Input type="email" inputMode="email" autoCapitalize="none" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </Field>
-        <Field label="Password" hint="At least 6 characters">
-          <Input type="password" autoComplete="new-password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+        <Field label="Password" hint="At least 8 characters">
+          <Input type="password" autoComplete="new-password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
         </Field>
         <Button type="submit" size="lg" loading={loading} className="w-full">
           Create owner account

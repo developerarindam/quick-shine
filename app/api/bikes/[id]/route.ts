@@ -4,15 +4,16 @@ import "@/app/models/User";
 import "@/app/models/Service";
 import { bikeNumberRegex, fail, normalizeBikeNumber, ok, withAuth } from "@/app/lib/auth";
 import { MANAGERS } from "@/app/lib/roles";
+import { jobScope } from "@/app/lib/jobEntry";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 // Bike with its full job history (services, payments, staff, status dates)
-export const GET = withAuth<Ctx>(null, async (_req, { params }) => {
+export const GET = withAuth<Ctx>(null, async (_req, { params }, user) => {
   const { id } = await params;
   const [bike, jobs] = await Promise.all([
     Bike.findById(id).lean(),
-    ServiceEntry.find({ bikeId: id }).sort({ createdAt: -1 }).lean(),
+    ServiceEntry.find({ bikeId: id, ...jobScope(user) }).sort({ createdAt: -1 }).lean(),
   ]);
   if (!bike) return fail("Bike not found", 404);
 

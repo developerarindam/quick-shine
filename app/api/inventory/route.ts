@@ -1,15 +1,18 @@
 import InventoryItem, { INVENTORY_UNITS } from "@/app/models/InventoryItem";
 import { fail, ok, withAuth } from "@/app/lib/auth";
 import { applyStockChange, isInventoryCategory, lowStockItems } from "@/app/lib/inventory";
-import { MANAGERS } from "@/app/lib/roles";
+import { allowed } from "@/app/lib/roles";
 
 /**
  * ?low=1  → only items that need restocking (for alerts)
  * ?lite=1 → id/name/unit of active items (for pickers)
  * default → every item, active first
  */
-export const GET = withAuth(MANAGERS, async (req) => {
+export const GET = withAuth(null, async (req, _ctx, user) => {
   const { searchParams } = new URL(req.url);
+  // the item picker is also used when setting up services
+  const permitted = allowed(user, "manageInventory") || (searchParams.get("lite") && allowed(user, "manageServices"));
+  if (!permitted) return fail("You don't have permission to do this", 403);
 
   if (searchParams.get("low")) return ok(await lowStockItems());
 
@@ -22,7 +25,7 @@ export const GET = withAuth(MANAGERS, async (req) => {
   return ok(items);
 });
 
-export const POST = withAuth(MANAGERS, async (req, _ctx, user) => {
+export const POST = withAuth("manageInventory", async (req, _ctx, user) => {
   const { name, category, unit, stock, minStock, costPerUnit, supplier, notes } = await req.json();
 
   if (!name || !String(name).trim()) return fail("Item name is required");

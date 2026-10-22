@@ -45,7 +45,7 @@ export default function UsersClient() {
 
   const save = async () => {
     if (!form.name.trim() || !form.email.trim()) return toast("Name and email are required", "error");
-    if (!editing && form.password.length < 6) return toast("Password must be at least 6 characters", "error");
+    if (!editing && form.password.length < 8) return toast("Password must be at least 8 characters", "error");
     setSaving(true);
     try {
       await api(editing ? `/api/users/${editing._id}` : "/api/users", {
@@ -152,7 +152,7 @@ export default function UsersClient() {
           <Field label="Mobile">
             <Input type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Optional" />
           </Field>
-          <Field label={editing ? "Reset password" : "Password"} hint={editing ? "Leave empty to keep the current password" : "At least 6 characters"}>
+          <Field label={editing ? "Reset password" : "Password"} hint={editing ? "Leave empty to keep the current password" : "At least 8 characters"}>
             <Input type="text" autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
           </Field>
 

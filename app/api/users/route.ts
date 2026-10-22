@@ -22,7 +22,7 @@ export const POST = withAuth(["ADMIN"], async (req) => {
   const { name, email, phone, password, role, status } = await req.json();
 
   if (!name || !email || !password) return fail("Name, email and password are required");
-  if (String(password).length < 6) return fail("Password must be at least 6 characters");
+  if (String(password).length < 8) return fail("Password must be at least 8 characters");
   if (role && !ROLES.includes(role as Role)) return fail("Invalid role");
 
   const exists = await User.exists({ email: String(email).toLowerCase().trim() });

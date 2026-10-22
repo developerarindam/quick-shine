@@ -22,7 +22,7 @@ import { PunchCard, useMyAttendance } from "@/app/components/attendance";
 import { JobCard } from "@/app/components/jobs";
 import { Avatar, Card, Chips, EmptyState, ErrorState, ListSkeleton, SectionTitle, Skeleton, Stat, cn } from "@/app/components/ui";
 import { useApi } from "@/app/lib/api";
-import { can } from "@/app/lib/roles";
+import { allowed, can } from "@/app/lib/roles";
 import { greeting, inr, rangeFor, rangeQuery, type RangePreset } from "@/app/lib/format";
 import type { Job } from "@/app/lib/types";
 
@@ -108,7 +108,7 @@ export default function DashboardHome() {
       <CashCard />
 
       {/* Inventory alert */}
-      {isManager && lowStock.items.length > 0 && (
+      {lowStock.items.length > 0 && (
         <div className="mt-4">
           <LowStockAlert items={lowStock.items} />
         </div>
@@ -322,7 +322,7 @@ function SalesReport() {
 function CashCard() {
   const user = useSession();
   const { pending } = usePendingHandovers();
-  const approver = can.approveCash(user.role);
+  const approver = allowed(user, "approveCash");
   const today = useMemo(() => rangeQuery(rangeFor("today")), []);
   const mine = useApi<{ me: { inHand: number; available: number; pending: number } | null }>(approver ? null : `/api/cash?${today}`);
 

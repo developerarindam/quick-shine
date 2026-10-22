@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 // 🔐 Token validation
 function isValidToken(token: string): boolean {
   try {
-    jwt.verify(token, process.env.JWT_SECRET as string);
+    jwt.verify(token, process.env.JWT_SECRET as string, { algorithms: ["HS256"] });
     return true;
   } catch {
     return false;

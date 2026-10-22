@@ -3,9 +3,9 @@ import Service from "@/app/models/Service";
 import User from "@/app/models/User";
 import "@/app/models/Bike";
 import { fail, ok, withAuth } from "@/app/lib/auth";
-import { MANAGERS, can } from "@/app/lib/roles";
+import { can } from "@/app/lib/roles";
 import { consumeForJob, reverseJob } from "@/app/lib/inventory";
-import { InputError, entryDate, receiverFor } from "@/app/lib/jobEntry";
+import { InputError, canSeeJob, entryDate, receiverFor } from "@/app/lib/jobEntry";
 import { JOB_STATUSES, balanceOf, calcTotals, paidOf, round2, type JobStatus } from "@/app/lib/jobs";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -15,10 +15,11 @@ async function loadJob(id: string) {
   return entry ? (await hydrateJobs([entry], { bikes: true }))[0] : null;
 }
 
-export const GET = withAuth<Ctx>(null, async (_req, { params }) => {
+export const GET = withAuth<Ctx>(null, async (_req, { params }, user) => {
   const { id } = await params;
   const job = await loadJob(id);
-  if (!job) return fail("Job not found", 404);
+  // staff only see their own jobs — same answer as a missing one
+  if (!job || !canSeeJob(user, job)) return fail("Job not found", 404);
   return ok(job);
 });
 
@@ -46,7 +47,7 @@ export const PATCH = withAuth<Ctx>(null, async (req, { params }, user) => {
   const body = await req.json();
 
   const entry = await ServiceEntry.findById(id);
-  if (!entry) return fail("Job not found", 404);
+  if (!entry || !canSeeJob(user, entry)) return fail("Job not found", 404);
   if (!entry.paymentType) entry.paymentType = "cash";
 
   let newCreatedAt: Date | null = null;
@@ -174,7 +175,7 @@ export const PATCH = withAuth<Ctx>(null, async (req, { params }, user) => {
   return ok(await loadJob(id));
 });
 
-export const DELETE = withAuth<Ctx>(MANAGERS, async (_req, { params }, user) => {
+export const DELETE = withAuth<Ctx>("deleteJobs", async (_req, { params }, user) => {
   const { id } = await params;
   const deleted = await ServiceEntry.findByIdAndDelete(id);
   if (!deleted) return fail("Job not found", 404);

@@ -3,6 +3,7 @@ import { Award, Clock, Droplets, IndianRupee, MapPin, Phone, ShieldCheck, Wrench
 import dbConnect from "@/app/lib/dbConnect";
 import Service from "@/app/models/Service";
 import { inr } from "@/app/lib/format";
+import StaffLoginButton from "@/app/components/StaffLoginButton";
 
 // Re-read the price list every few minutes so catalog edits show up
 export const revalidate = 300;
@@ -44,9 +45,7 @@ export default async function Home() {
               <a href="#about" className="hover:text-brand-600">About</a>
               <a href="#contact" className="hover:text-brand-600">Contact</a>
             </div>
-            <Link href="/login" className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-              Staff login
-            </Link>
+            <StaffLoginButton />
           </div>
         </div>
       </nav>

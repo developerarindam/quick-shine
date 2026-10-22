@@ -4,11 +4,11 @@ import CashHandover from "@/app/models/CashHandover";
 import User from "@/app/models/User";
 import { ok, parseRange, withAuth } from "@/app/lib/auth";
 import { cashCollectedBetween, cashPositions } from "@/app/lib/cash";
-import { can } from "@/app/lib/roles";
+import { allowed } from "@/app/lib/roles";
 
 export const GET = withAuth(null, async (req, _ctx, user) => {
   const { from, to } = parseRange(new URL(req.url).searchParams);
-  const manager = can.approveCash(user.role);
+  const manager = allowed(user, "approveCash");
 
   const scope = manager ? {} : { from: user.id };
   const [positions, collected, requests, users] = await Promise.all([

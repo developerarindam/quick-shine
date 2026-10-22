@@ -4,13 +4,12 @@ import Service from "@/app/models/Service";
 import "@/app/models/ServiceEntry";
 import "@/app/models/User";
 import { fail, ok, withAuth } from "@/app/lib/auth";
-import { MANAGERS } from "@/app/lib/roles";
 import { isInventoryCategory } from "@/app/lib/inventory";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 // Item with its latest stock movements and the services that use it
-export const GET = withAuth<Ctx>(MANAGERS, async (_req, { params }) => {
+export const GET = withAuth<Ctx>("manageInventory", async (_req, { params }) => {
   const { id } = await params;
   const item = await InventoryItem.findById(id).lean();
   if (!item) return fail("Item not found", 404);
@@ -37,7 +36,7 @@ export const GET = withAuth<Ctx>(MANAGERS, async (_req, { params }) => {
 });
 
 // Edits details only — stock changes go through /stock so they are logged
-export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
+export const PUT = withAuth<Ctx>("manageInventory", async (req, { params }) => {
   const { id } = await params;
   const body = await req.json();
 
@@ -66,7 +65,7 @@ export const PUT = withAuth<Ctx>(MANAGERS, async (req, { params }) => {
   return ok(item);
 });
 
-export const DELETE = withAuth<Ctx>(MANAGERS, async (_req, { params }) => {
+export const DELETE = withAuth<Ctx>("manageInventory", async (_req, { params }) => {
   const { id } = await params;
 
   // Items with real history are archived so past records stay readable
